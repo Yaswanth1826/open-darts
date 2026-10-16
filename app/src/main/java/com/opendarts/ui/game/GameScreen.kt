@@ -1,39 +1,37 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.opendarts.ui.game
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -41,30 +39,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opendarts.game.engine.DartGame
-import com.opendarts.game.model.DartHit
-import com.opendarts.geometry.Point
+import com.opendarts.game.x01.X01Game
 import com.opendarts.session.GameSession
 import com.opendarts.session.InputMode
-import com.opendarts.ui.camera.BoardOverlay
-import com.opendarts.ui.camera.CalibrationStore
-import com.opendarts.ui.camera.CameraPermissionGate
-import com.opendarts.ui.camera.CameraPhase
-import com.opendarts.ui.camera.CameraStatus
-import com.opendarts.ui.camera.CameraView
-import com.opendarts.ui.camera.Guide
-import com.opendarts.ui.camera.GuideOverlay
-import com.opendarts.ui.camera.DebugCapture
-import com.opendarts.ui.camera.ScoringCamera
-import com.opendarts.ui.camera.TfliteDartNet
-import com.opendarts.vision.TrackerEvent
-import com.opendarts.vision.TrackerState
+import com.opendarts.ui.theme.Condensed
+import com.opendarts.ui.theme.CondensedRegular
+import com.opendarts.ui.theme.Palette
 
 @Composable
 fun GameScreen(session: GameSession, onExit: () -> Unit, onCalibrate: () -> Unit) {
@@ -85,257 +71,82 @@ fun GameScreen(session: GameSession, onExit: () -> Unit, onCalibrate: () -> Unit
     }
 }
 
-// ---- manual -------------------------------------------------------------------------------------------------------
-
 @Composable
 private fun ManualGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        TopBar(session, game, onExit)
-        Scoreboard(game)
-        TurnPanel(session, game)
-        if (!game.isFinished) ScoreInput(game.turnHits) { session.throwDart(it) }
-        Spacer(Modifier.height(16.dp))
-    }
-}
-
-// ---- shared pieces -----------------------------------------------------------------------------------------------
-
-@Composable
-private fun TopBar(session: GameSession, game: DartGame<*>, onExit: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        OutlinedButton(onClick = onExit) { Text("Quit") }
-        Column(Modifier.weight(1f)) {
-            Text(session.setup.kind.title.uppercase(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            Text(session.setup.subtitle, style = MaterialTheme.typography.bodySmall)
+    Column(Modifier.fillMaxSize().background(Palette.KeyLight).systemBarsPadding()) {
+        GameTopBar(session, game, onExit, onNextPlayer = null)
+        Column(Modifier.fillMaxWidth().background(Color(0xFFE2E2E2)).padding(bottom = 2.dp)) {
+            DartSlots(game, Color(0xFF7A7A7A))
+            Text(
+                session.message, color = Palette.Ink.copy(alpha = 0.7f), fontFamily = CondensedRegular, fontSize = 14.sp, maxLines = 1,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
         }
-        OutlinedButton(onClick = { session.undo() }, enabled = game.canUndo) { Text("Undo") }
+        PlayerTabs(game, roomy = true)
+        Keypad(
+            canUndo = game.canUndo, enabled = !game.isFinished,
+            onHit = { session.throwDart(it) }, onUndo = { session.undo() }, onNext = { session.nextPlayer() },
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
-/** The three dart slots of the current turn, the status line and the turn buttons. */
+/**
+ * White header: menu, the AI/keypad switch, the round, and (when the camera does the scoring) the Next player button.
+ * [extraMenu] lets the camera screen add its own entries.
+ */
 @Composable
-private fun TurnPanel(session: GameSession, game: DartGame<*>, compact: Boolean = false) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            for (i in 0 until game.dartsPerTurn) {
-                val hit = game.turnHits.getOrNull(i)
-                val active = !game.isFinished && hit == null && i == game.turnHits.size
-                Surface(
-                    modifier = Modifier.weight(1f).height(if (compact) 52.dp else 60.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    border = if (active) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(hit?.toString() ?: "\u2013", fontSize = 24.sp, fontWeight = FontWeight.Black, color = if (hit != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
-                    }
-                }
-            }
-            val total = game.turnHits.sumOf { it.points }
-            Column(Modifier.widthIn(min = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("TURN", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                Text(total.toString(), fontSize = 24.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.secondary)
+fun GameTopBar(
+    session: GameSession,
+    game: DartGame<*>,
+    onExit: () -> Unit,
+    onNextPlayer: (() -> Unit)?,
+    extraMenu: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit = {},
+) {
+    var menu by remember { mutableStateOf(false) }
+    var board by remember { mutableStateOf(false) }
+    val camera = session.setup.input == InputMode.CAMERA
+    Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box {
+            SquareButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "Menu", tint = Palette.Ink) }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("Scoreboard") }, onClick = { menu = false; board = true })
+                DropdownMenuItem(text = { Text("Undo last dart") }, enabled = game.canUndo, onClick = { menu = false; session.undo() })
+                extraMenu { menu = false }
+                DropdownMenuItem(text = { Text("Quit game") }, onClick = { menu = false; onExit() })
             }
         }
-        Text(session.message, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { session.nextPlayer() }, enabled = !game.isFinished, modifier = Modifier.weight(1f)) { Text("Next player") }
-            OutlinedButton(onClick = { session.throwDart(DartHit.MISS) }, enabled = !game.isFinished, modifier = Modifier.weight(1f)) { Text("Miss") }
+        SquareButton(onClick = { session.switchInput(if (camera) InputMode.MANUAL else InputMode.CAMERA) }) {
+            Text("AI", color = if (camera) Palette.Teal else Palette.Ink.copy(alpha = 0.4f), fontFamily = Condensed, fontSize = 22.sp)
         }
-    }
-}
-
-/** One compact card per player; the thrower is outlined. */
-@Composable
-private fun PlayerStrip(game: DartGame<*>) {
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        game.players.forEachIndexed { i, player ->
-            val active = i == game.currentPlayerIndex && !game.isFinished
-            val (big, small) = headline(game, i)
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = if (active) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface,
-                border = if (active) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
-                modifier = Modifier.widthIn(min = 108.dp),
-            ) {
-                Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(player.name, maxLines = 1, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge, color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-                    Text(big, fontSize = 30.sp, fontWeight = FontWeight.Black)
-                    Text(small, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f), maxLines = 1)
-                }
-            }
-        }
-    }
-}
-
-// ---- camera ------------------------------------------------------------------------------------------------------
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCalibrate: () -> Unit) {
-    val context = LocalContext.current
-    val store = remember { CalibrationStore(context) }
-    var status by remember { mutableStateOf(CameraStatus()) }
-    val markers = remember { mutableStateListOf<Point>() }
-    var showManual by remember { mutableStateOf(false) }
-    var aligning by remember { mutableStateOf(false) }
-    var guide by remember { mutableStateOf(Guide()) }
-    val camera = remember {
-        ScoringCamera(
-            store,
-            onEvent = { event ->
-                when (event) {
-                    is TrackerEvent.DartLanded -> { markers.add(event.pixel); session.throwDart(event.hit, fromCamera = true) }
-                    is TrackerEvent.DartsRemoved -> {
-                        while (markers.size > event.remaining && markers.isNotEmpty()) markers.removeAt(markers.lastIndex)
-                        if (event.remaining == 0) session.dartsPulled()
-                    }
-                }
+        val leg = (game as? X01Game)?.let { if (it.config.legsToWin > 1 || it.config.setsToWin > 1) ", LEG ${it.gameState.legsPlayed + 1}" else "" }.orEmpty()
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(color = Palette.Ink, fontSize = 30.sp)) { append(session.setup.title.uppercase()) }
+                withStyle(SpanStyle(color = Palette.Ink.copy(alpha = 0.5f), fontSize = 18.sp)) { append("  R${game.round}$leg") }
             },
-            onStatus = { status = it },
-            capture = DebugCapture(context),
-            net = TfliteDartNet.loadOrNull(context),
-        ).also { if (session.manualCalibration) it.useManualCalibration() }
-    }
-    DisposableEffect(camera) { onDispose { camera.release() } }
-    DisposableEffect(aligning) {
-        camera.searchPaused = aligning
-        onDispose { camera.searchPaused = false }
-    }
-
-    val landscape = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    val controls: @Composable () -> Unit = {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (aligning) {
-                AlignHelp(onLock = { camera.useGuide(guide); aligning = false }, onCancel = { aligning = false })
-            } else {
-                if (!game.isFinished && status.phase != CameraPhase.TRACKING) {
-                    NotFoundHelp(camera, notFound = status.phase == CameraPhase.NOT_FOUND, onAlign = { aligning = true }, onCalibrate = onCalibrate)
-                }
-                TurnPanel(session, game, compact = true)
-                CameraControls(camera, status, onManual = { showManual = true })
-            }
-            DebugRow(camera)
-        }
-    }
-
-    Column(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        TopBar(session, game, onExit)
-        PlayerStrip(game)
-        if (landscape) {
-            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                CameraBox(camera, status, markers, aligning, guide, { guide = it }, Modifier.weight(1.3f).fillMaxHeight())
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { controls() }
+            fontFamily = Condensed, maxLines = 1, modifier = Modifier.weight(1f),
+        )
+        if (onNextPlayer != null) {
+            Box(Modifier.clip(RoundedCornerShape(12.dp)).background(Palette.Sand).clickable(enabled = !game.isFinished, onClick = onNextPlayer).padding(horizontal = 14.dp, vertical = 10.dp)) {
+                Text("NEXT PLAYER", color = Palette.Ink, fontFamily = Condensed, fontSize = 18.sp)
             }
         } else {
-            CameraBox(camera, status, markers, aligning, guide, { guide = it }, Modifier.weight(1f).fillMaxWidth())
-            controls()
+            SquareButton(onClick = { board = true }) { Icon(Icons.AutoMirrored.Filled.List, "Scoreboard", tint = Palette.Ink) }
         }
     }
-
-    if (showManual) {
-        ModalBottomSheet(onDismissRequest = { showManual = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    if (board) {
+        ModalBottomSheet(onDismissRequest = { board = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             Column(Modifier.padding(horizontal = 14.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Enter or correct a dart", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                Text("Wrong reading? Close this, tap Undo, then enter the right dart here.", style = MaterialTheme.typography.bodySmall)
-                if (!game.isFinished) ScoreInput(game.turnHits) { session.throwDart(it) }
-                Spacer(Modifier.height(24.dp))
+                Text(session.setup.kind.title.uppercase() + "  " + session.setup.subtitle, style = androidx.compose.material3.MaterialTheme.typography.labelLarge)
+                Scoreboard(game)
+                androidx.compose.foundation.layout.Spacer(Modifier.size(24.dp))
             }
         }
     }
 }
 
 @Composable
-private fun CameraBox(camera: ScoringCamera, status: CameraStatus, markers: List<Point>, aligning: Boolean, guide: Guide, onGuide: (Guide) -> Unit, modifier: Modifier) {
-    val portrait = LocalConfiguration.current.orientation != android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    val aspect = if (status.frameWidth > 0) status.frameWidth.toFloat() / status.frameHeight else if (portrait) 0.75f else 1.3333f
-    Box(modifier.clip(RoundedCornerShape(16.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
-        CameraPermissionGate(Modifier.fillMaxSize()) {
-            Box(Modifier.aspectRatio(aspect)) {
-                CameraView(Modifier.fillMaxSize(), onFrame = camera::onFrame)
-                if (aligning) GuideOverlay(guide, onGuide, Modifier.fillMaxSize()) else BoardOverlay(status, markers, Modifier.fillMaxSize())
-            }
-            if (!aligning) StatusPill(status, Modifier.align(Alignment.TopCenter).padding(10.dp))
-        }
-    }
-}
-
-@Composable
-private fun StatusPill(status: CameraStatus, modifier: Modifier) {
-    val (text, color) = when (status.phase) {
-        CameraPhase.FINDING_BOARD -> "Looking for the dartboard \u2013 keep the whole board in view" to Color(0xFFFFC857)
-        CameraPhase.NOT_FOUND -> "Can't see the board clearly" to Color(0xFFFF6B6B)
-        CameraPhase.TRACKING -> when (status.tracker) {
-            TrackerState.WAITING_FOR_BOARD -> "Scanning the empty board \u2013 keep hands clear" to Color(0xFFFFC857)
-            TrackerState.MOVING -> "Detecting\u2026" to Color(0xFFFFC857)
-            TrackerState.SETTLING -> "Hold on\u2026" to Color(0xFFFFC857)
-            TrackerState.READY -> "Ready \u2013 throw!" + (if (status.darts > 0) "  \u00B7  ${status.darts} on board" else "") + (if (status.usingAi) "  \u00B7  AI" else "") to Color(0xFF63E6BE)
-        }
-    }
-    Surface(modifier, shape = RoundedCornerShape(50), color = Color(0xCC000000)) {
-        Text(text, Modifier.padding(horizontal = 14.dp, vertical = 6.dp), color = color, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-    }
-}
-
-@Composable
-private fun CameraControls(camera: ScoringCamera, status: CameraStatus, onManual: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        FilledTonalButton(onClick = { camera.findBoardAgain() }, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)) { Text("Rescan", maxLines = 1) }
-        FilledTonalButton(
-            onClick = { camera.startNow() }, enabled = status.phase == CameraPhase.TRACKING,
-            modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
-        ) { Text("Board clear", maxLines = 1) }
-        if (!status.usingAi) {
-            FilledTonalButton(onClick = { camera.rotateBoard(-18.0) }, enabled = status.phase == CameraPhase.TRACKING, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) { Text("\u21BA") }
-            FilledTonalButton(onClick = { camera.rotateBoard(18.0) }, enabled = status.phase == CameraPhase.TRACKING, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) { Text("\u21BB") }
-        }
-        Button(onClick = onManual, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)) { Text("Manual", maxLines = 1) }
-    }
-}
-
-@Composable
-private fun NotFoundHelp(camera: ScoringCamera, notFound: Boolean, onAlign: () -> Unit, onCalibrate: () -> Unit) {
-    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                if (notFound) "Can't find the board automatically. Fit the whole board in view, square-on, with even light and no glare - or line it up yourself."
-                else "Looking for the board. Taking long? Line it up yourself - it only takes a moment.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onAlign, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp)) { Text("Align board", maxLines = 1) }
-                OutlinedButton(onClick = { camera.findBoardAgain() }, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp)) { Text("Try again", maxLines = 1) }
-                OutlinedButton(onClick = onCalibrate, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp)) { Text("4 taps", maxLines = 1) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AlignHelp(onLock: () -> Unit, onCancel: () -> Unit) {
-    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                "Drag the green circle onto the board and pinch to resize it until the outer ring sits on the outside edge of the doubles. The red line must point at the 20. Clear the board of darts first.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onLock, modifier = Modifier.weight(1f)) { Text("Lock board") }
-                OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Cancel") }
-            }
-        }
-    }
-}
-@Composable
-private fun DebugRow(camera: ScoringCamera) {
-    var everyDart by remember { mutableStateOf(false) }
-    var saved by remember { mutableStateOf<String?>(null) }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(
-            onClick = { camera.saveFrame("misread") { name -> saved = if (name.isEmpty()) "Could not save" else "Saved to Pictures/OpenDarts" } },
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp),
-        ) { Text("Save frame", maxLines = 1) }
-        Switch(checked = everyDart, onCheckedChange = { everyDart = it; camera.captureEveryDart = it })
-        Text(saved ?: "Save every dart", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-    }
+fun SquareButton(onClick: () -> Unit, content: @Composable () -> Unit) {
+    Box(Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(Palette.Sand).clickable(onClick = onClick), contentAlignment = Alignment.Center) { content() }
 }

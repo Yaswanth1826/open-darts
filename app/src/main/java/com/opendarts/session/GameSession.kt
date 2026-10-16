@@ -38,6 +38,12 @@ class GameSession : ViewModel() {
 
     fun rematch() = start(setup)
 
+    /** Switches between camera and keypad scoring in the middle of a game. */
+    fun switchInput(mode: InputMode) {
+        setup = setup.copy(input = mode)
+        revision++
+    }
+
     fun leave() {
         game = null
         revision++
