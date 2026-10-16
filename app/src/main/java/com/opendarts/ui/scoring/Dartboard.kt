@@ -24,7 +24,8 @@ fun Dartboard(modifier: Modifier = Modifier, onHit: (DartHit) -> Unit) {
             val center = Offset(size.width / 2f, size.height / 2f)
             val dx = tap.x - center.x
             val dy = tap.y - center.y
-            val radius = sqrt(dx * dx + dy * dy) / (size.minDimension / 2f)
+            val boardRadius = minOf(size.width, size.height) / 2f
+            val radius = sqrt((dx * dx + dy * dy).toDouble()).toFloat() / boardRadius
             if (radius > 0.97f) { onHit(DartHit.MISS); return@detectTapGestures }
             if (radius < 0.055f) { onHit(DartHit.INNER_BULL); return@detectTapGestures }
             if (radius < 0.115f) { onHit(DartHit.OUTER_BULL); return@detectTapGestures }
@@ -32,13 +33,13 @@ fun Dartboard(modifier: Modifier = Modifier, onHit: (DartHit) -> Unit) {
             val number = order[((degrees / 18.0).toInt()) % 20]
             val multiplier = when {
                 radius in 0.46f..0.56f -> Multiplier.TRIPLE
-                radius >= 0.86f -> Multiplier.DOUBLE
+                radius in 0.86f..0.97f -> Multiplier.DOUBLE
                 else -> Multiplier.SINGLE
             }
             onHit(DartHit(number, multiplier))
         }
     }) {
-        val radius = size.minDimension / 2f
+        val radius = minOf(size.width, size.height) / 2f
         val center = Offset(size.width / 2f, size.height / 2f)
         val rings = listOf(0.97f, 0.86f, 0.56f, 0.46f, 0.115f, 0.055f)
         val ringColors = listOf(Color(0xFFECE7D8), Color(0xFF171B19), Color(0xFFECE7D8), Color(0xFF171B19), Color(0xFF1B8A5A), Color(0xFFD64A43))
