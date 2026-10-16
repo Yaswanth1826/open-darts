@@ -9,13 +9,21 @@ the outer edge of the double ring at the 5|20, 17|3, 8|11 and 13|6 wires.
 
 Extra labelled data in the same YOLO layout (for example frames from the app's "Save every dart" captures after you
 label them) can be added with --extra, which expects <dir>/images/*.jpg and <dir>/labels/*.txt.
+
+--oblique N adds N side-view copies of every training picture. The DeepDarts pictures are all flattened to a square-on
+board, but the app's phone sits beside the board, so each copy is warped the way a camera turned up to 65 degrees to
+the side (with some tilt and roll, board size and position) would see it, in a letterboxed 4:3 or 3:4 frame like the
+app's. The app flattens the board again before reading the darts, so the network needs both kinds of picture.
 """
 import argparse
 import os
 import shutil
 
+import cv2
 import numpy as np
 import pandas as pd
+
+from oblique import SIZE, oblique
 
 BOX = 0.025  # box size as a share of the image, as used by DeepDarts
 VAL = {
@@ -48,6 +56,36 @@ def label_lines(xy) -> list:
     return lines
 
 
+def side_view(img, xy, rng):
+    """One random side view of a flattened picture: (letterboxed 640 image, YOLO label lines), or None if a corner is cut off."""
+    frame_size = (960, 720) if rng.rand() < 0.5 else (720, 960)
+    yaw = rng.uniform(5, 65) * rng.choice([-1, 1])
+    share = min(rng.uniform(0.4, 0.8) * (1.0 + 0.4 * abs(yaw) / 65), 0.9)
+    shift = (rng.uniform(-0.08, 0.08), rng.uniform(-0.08, 0.08))
+    frame, h = oblique(img, yaw, rng.uniform(-15, 20), rng.uniform(-5, 5), frame=frame_size, board_share=share, shift=shift,
+                         border=tuple(int(v) for v in rng.randint(20, 160, 3)))
+    fw, fh = frame_size
+    scale = SIZE / max(fw, fh)
+    nw, nh = round(fw * scale), round(fh * scale)
+    ox, oy = (SIZE - nw) // 2, (SIZE - nh) // 2
+    canvas = np.full((SIZE, SIZE, 3), 114, np.uint8)
+    canvas[oy:oy + nh, ox:ox + nw] = cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_AREA)
+
+    mapped = cv2.perspectiveTransform(np.array(xy, dtype=np.float64)[None], h)[0]
+    mapped = mapped * scale + [ox, oy]
+    inside_frame = lambda x, y: ox + margin < x < ox + nw - margin and oy + margin < y < oy + nh - margin
+    margin = BOX / 2 * SIZE
+    mapped_share = mapped / SIZE
+    lines = []
+    for i, ((px, py), (x, y)) in enumerate(zip(mapped, mapped_share)):
+        inside = inside_frame(px, py)
+        if i < 4 and not inside:
+            return None
+        if inside:
+            lines.append(f"{i + 1 if i < 4 else 0} {x:.6f} {y:.6f} {BOX} {BOX}")
+    return canvas, lines
+
+
 def link(src: str, dst: str):
     try:
         os.symlink(os.path.abspath(src), dst)
@@ -62,7 +100,9 @@ def main():
     parser.add_argument("--size", default="800")
     parser.add_argument("--datasets", nargs="+", default=["d1", "d2"], help="which DeepDarts sets to use")
     parser.add_argument("--extra", nargs="*", default=[], help="extra YOLO-format folders (images/ and labels/)")
+    parser.add_argument("--oblique", type=int, default=0, help="side-view copies of every training picture")
     args = parser.parse_args()
+    rng = np.random.RandomState(0)
 
     labels = pd.read_pickle(os.path.join(args.dataset_dir, "labels.pkl"))
     counts = {"train": 0, "val": 0, "test": 0}
@@ -85,6 +125,16 @@ def main():
         with open(os.path.join(args.out, "labels", split, stem + ".txt"), "w") as f:
             f.write("\n".join(lines) + "\n")
         counts[split] += 1
+        if split == "train" and args.oblique:
+            img = cv2.imread(src)
+            for k in range(args.oblique):
+                made = side_view(img, row.xy, rng)
+                if made is None:
+                    continue
+                cv2.imwrite(os.path.join(args.out, "images", split, f"{stem}_side{k}.jpg"), made[0])
+                with open(os.path.join(args.out, "labels", split, f"{stem}_side{k}.txt"), "w") as f:
+                    f.write("\n".join(made[1]) + "\n")
+                counts[split] += 1
 
     for extra in args.extra:
         for name in os.listdir(os.path.join(extra, "images")):

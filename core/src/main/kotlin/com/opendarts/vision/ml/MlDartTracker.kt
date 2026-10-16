@@ -21,6 +21,8 @@ data class MlTrackerConfig(
     val smoothing: Double = 0.4,
     val jumpFraction: Double = 0.04,
     val jumpLooksToReset: Int = 3,
+    /** When the board cannot be found (a hand in front of it, a blurred frame) the last fit is kept for this many looks. */
+    val holdLooks: Int = 10,
 )
 
 /**
@@ -29,7 +31,7 @@ data class MlTrackerConfig(
  * absorbs hands, flickering detections and single bad frames.
  */
 class MlDartTracker(
-    private val detect: (ColorFrame) -> FrameDetections,
+    private val detect: (ColorFrame, List<Point>?) -> FrameDetections,
     private val config: MlTrackerConfig = MlTrackerConfig(),
 ) {
     private class Known(val board: Point, val pixel: Point, var misses: Int = 0)
@@ -39,10 +41,13 @@ class MlDartTracker(
     private var candidates = ArrayList<Candidate>()
     private var corners: List<Point>? = null
     private var jumps = 0
+    private var lost = 0
 
     var state = TrackerState.WAITING_FOR_BOARD
         private set
     var boardToPixel: Homography? = null
+        private set
+    var view: BoardView? = null
         private set
     val darts: Int get() = known.size
 
@@ -53,16 +58,14 @@ class MlDartTracker(
     }
 
     fun process(frame: ColorFrame): List<TrackerEvent> {
-        val found = detect(frame)
-        val cal = found.calibration
-        if (cal == null) {
-            state = TrackerState.WAITING_FOR_BOARD
-            return emptyList()
-        }
-        val fit = fit(cal, frame) ?: run { state = TrackerState.WAITING_FOR_BOARD; return emptyList() }
+        val found = detect(frame, corners)
+        val cal = completeCorners(found.corners, boardToPixel) ?: return lostBoard()
+        val fit = fit(cal, frame) ?: return lostBoard()
+        lost = 0
         state = TrackerState.READY
         val toBoard = fit.inverse()
         boardToPixel = fit
+        view = PlacementAdvisor.assess(fit, frame.width, frame.height)
 
         val seenNow = found.darts.mapNotNull { pixel ->
             val board = toBoard.apply(pixel)
@@ -106,6 +109,12 @@ class MlDartTracker(
 
         if (removed > 0) events += TrackerEvent.DartsRemoved(known.size)
         return events
+    }
+
+    /** A look without a usable board: keep the last fit for a while so a passing hand does not lose the game. */
+    private fun lostBoard(): List<TrackerEvent> {
+        if (boardToPixel == null || ++lost > config.holdLooks) state = TrackerState.WAITING_FOR_BOARD
+        return emptyList()
     }
 
     /** Returns the board-to-pixel fit for the corners, smoothed against previous looks, or null if they make no sense. */

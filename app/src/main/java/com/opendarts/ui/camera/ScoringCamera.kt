@@ -11,6 +11,7 @@ import com.opendarts.vision.DartTracker
 import com.opendarts.vision.GrayFrame
 import com.opendarts.vision.TrackerEvent
 import com.opendarts.vision.TrackerState
+import com.opendarts.vision.ml.BoardView
 import com.opendarts.vision.ml.DartNet
 import com.opendarts.vision.ml.MlDartTracker
 import com.opendarts.vision.ml.TwoPassDetector
@@ -31,6 +32,8 @@ data class CameraStatus(
     val frameHeight: Int = 0,
     /** True while the trained network is doing the detection. */
     val usingAi: Boolean = false,
+    /** How the camera sees the board (angle, size, cut-off), once the network has found it. */
+    val view: BoardView? = null,
 )
 
 /**
@@ -189,7 +192,7 @@ class ScoringCamera(
             missedLooks >= NOT_FOUND_LOOKS -> CameraPhase.NOT_FOUND
             else -> CameraPhase.FINDING_BOARD
         }
-        publish(CameraStatus(phase, tracker.state, tracker.darts, tracker.boardToPixel, colour.width, colour.height, usingAi = true))
+        publish(CameraStatus(phase, tracker.state, tracker.darts, tracker.boardToPixel, colour.width, colour.height, usingAi = true, view = tracker.view.takeIf { ready }))
         events.forEach { event ->
             if (captureEveryDart && event is TrackerEvent.DartLanded) {
                 capture?.save(camera.gray, "ai-dart-${event.hit.multiplier.name}-${event.hit.base}", tracker.boardToPixel, listOf(event.pixel), colour)

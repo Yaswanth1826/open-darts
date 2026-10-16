@@ -49,6 +49,8 @@ import com.opendarts.ui.camera.CalibrationStore
 import com.opendarts.ui.camera.CameraPermissionGate
 import com.opendarts.ui.camera.CameraPhase
 import com.opendarts.ui.camera.CameraStatus
+import com.opendarts.vision.ml.BoardView
+import com.opendarts.vision.ml.Placement
 import com.opendarts.ui.camera.CameraView
 import com.opendarts.ui.camera.DebugCapture
 import com.opendarts.ui.camera.Guide
@@ -199,7 +201,7 @@ private fun StatusPill(status: CameraStatus, message: String, modifier: Modifier
             TrackerState.WAITING_FOR_BOARD -> "Scanning the empty board \u2013 keep hands clear"
             TrackerState.MOVING -> "Detecting\u2026"
             TrackerState.SETTLING -> "Hold on\u2026"
-            TrackerState.READY -> message + (if (status.darts > 0) "  \u00B7  ${status.darts} on board" else "")
+            TrackerState.READY -> coaching(status.view) ?: (message + (if (status.darts > 0) "  \u00B7  ${status.darts} on board" else ""))
         }
         else -> message
     }
@@ -208,12 +210,20 @@ private fun StatusPill(status: CameraStatus, message: String, modifier: Modifier
     }
 }
 
+/** A short instruction when the phone is badly placed, or null when the view is fine. */
+private fun coaching(view: BoardView?): String? = when (view?.placement) {
+    Placement.CUT_OFF -> "Part of the board is out of view \u2013 move the phone back"
+    Placement.TOO_FAR -> "Move the phone closer to the board"
+    Placement.TOO_SIDEWAYS -> "Too far to the side \u2013 move the phone round in front a little"
+    else -> null
+}
+
 /** Dark card over the camera while the board is not locked yet. */
 @Composable
 private fun FindingCard(notFound: Boolean, camera: ScoringCamera, onAlign: () -> Unit, onCalibrate: () -> Unit, onTips: () -> Unit) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xE6322E26)).padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
-            if (notFound) "Can't see the board clearly. Face the camera square-on at the whole board." else "Please make the camera face towards the dartboard.",
+            if (notFound) "Can't see the board clearly. Put the phone beside the board, a little to one side and facing it, with the whole board in view." else "Point the camera at the dartboard from a little to the side, with the whole board in view.",
             color = Color.White.copy(alpha = 0.92f), fontFamily = CondensedRegular, fontSize = 18.sp, textAlign = TextAlign.Center,
         )
         Text("Setup tips \u203A", color = Palette.Link, fontFamily = Condensed, fontSize = 19.sp, modifier = Modifier.clickable(onClick = onTips))

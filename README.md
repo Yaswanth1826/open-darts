@@ -17,7 +17,7 @@ Open Darts is a free, offline-first Android darts companion. It supports multipl
 
 ## Camera accuracy
 
-Detection is tested on synthetic frames only. Real-world accuracy depends on lighting, camera angle and board condition, so expect to tune and to use manual correction occasionally. Tips: mount the phone steady, view the board square-on as far as possible, use even light without strong glare, keep the 20 roughly at the top, and tap Rescan if the phone or board moves.
+Detection is tested on synthetic frames only. Real-world accuracy depends on lighting, camera angle and board condition, so expect to tune and to use manual correction occasionally. Tips: mount the phone steady, put the phone beside the board, a little to one side and facing across it (anything from straight-on to about 70 degrees to the side works, and the app tells you if the angle, distance or framing is off), use even light without strong glare, keep the 20 roughly at the top, and tap Rescan if the phone or board moves.
 ## Requirements
 
 - Android Studio with Android SDK 35 installed
@@ -62,6 +62,6 @@ The APK is a debug build for testing. It is not a Play Store release. The cloud 
 
 ## AI dart detection (recommended)
 
-The app has two detection modes. If `app/src/main/assets/dartnet.tflite` exists, a small neural network (YOLOv8-nano) finds the four calibration points and the dart tips in every look, at any camera angle, with no calibration and no alignment. Without the file the app falls back to the classic detector.
+The app has two detection modes. If `app/src/main/assets/dartnet.tflite` exists, a small neural network (YOLOv8-nano) finds the four calibration points and the dart tips in every look, with no calibration and no alignment. The phone is meant to sit beside the board: the app finds the board, flattens the picture square-on using the four calibration points, and reads the darts on the flat board. The first pass is skipped once the board is known, a hidden corner is predicted from the other three, and the last board position is held while a hand is in the way. Without the file the app falls back to the classic detector.
 
-To create the model without your own GPU, open `training/darts_training.ipynb` in Google Colab (free T4 GPU) and follow the steps. It trains on the public [DeepDarts dataset](https://ieee-dataport.org/open-access/deepdarts-dataset) (check its terms for your use) and can include your own labelled pictures. Copy the resulting `dartnet.tflite` into `app/src/main/assets/` and rebuild.
+To create the model without your own GPU, open `training/darts_training.ipynb` in Google Colab (free T4 GPU) and follow the steps. It trains on the public [DeepDarts dataset](https://ieee-dataport.org/open-access/deepdarts-dataset) (check its terms for your use) and can include your own labelled pictures. The DeepDarts pictures are all flattened square-on, so the notebook also generates side-view copies (`prepare_deepdarts.py --oblique 2`) so the network can find the board in a raw side-on frame; `training/eval_oblique.py` measures how a model copes with different side angles. Copy the resulting `dartnet.tflite` into `app/src/main/assets/` and rebuild.
