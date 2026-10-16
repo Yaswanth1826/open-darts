@@ -110,7 +110,9 @@ def main():
         os.makedirs(os.path.join(args.out, "images", split), exist_ok=True)
         os.makedirs(os.path.join(args.out, "labels", split), exist_ok=True)
 
-    for _, row in labels.iterrows():
+    for n, (_, row) in enumerate(labels.iterrows()):
+        if n % 1000 == 0:
+            print(f"{n}/{len(labels)} pictures, {counts}", flush=True)
         if row.img_folder[:2] not in args.datasets:
             continue
         src = os.path.join(args.dataset_dir, "cropped_images", args.size, row.img_folder, row.img_name)
