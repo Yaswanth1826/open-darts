@@ -1,13 +1,22 @@
 # Open Darts
 
-Open Darts is a free, offline-first Android darts companion. The first prototype includes a dark Jetpack Compose UI, a single-player X01 game, both digital-board taps and quick score entry, undo/reset, and an opt-in CameraX preview prototype.
+Open Darts is a free, offline-first Android darts companion. It supports multiple game modes, multiplayer, manual scoring and camera-based automatic scoring.
 
-## Current status
+## Features
 
-- Implemented: pure Kotlin dart scoring model and X01 rules; 301/501/701 selection; single/double/treble quick entry; tappable board; undo; double-out; optional double-in engine support; camera preview screen.
-- Prototype only: camera preview. It does **not** yet detect dart tips or calculate scores from images.
-- Next: improve board rendering, persist match history with Room, add Cricket and Around the Clock, and begin camera board calibration.
+- **Games:** X01 (101-1001, straight/double/master in and out, legs and sets, checkout suggestions), Cricket (standard, cut-throat, no-score), Around the Clock (with skip and doubles-only variants) and Count Up.
+- **Multiplayer:** 1-8 players on one device, saved player names, per-turn undo, averages and highest visits.
+- **Manual scoring:** tap a regulation-accurate dartboard or use the number pad.
+- **Camera scoring:** point the phone at the board, calibrate once by tapping four reference wires, and darts are detected and scored automatically. Any dart can be corrected by hand (Undo, then tap the board) and a Miss / Next player button covers bounce-outs.
 
+## Architecture
+
+- `core/` - pure Kotlin JVM module: game engines, board geometry and homography, and the classical-CV dart tracker. Fully unit-tested without Android (`./gradlew :core:test`). Includes a synthetic perspective renderer used to test camera accuracy on all 62 scoring areas.
+- `app/` - Jetpack Compose UI, CameraX capture, calibration and session state.
+
+## Camera accuracy
+
+Detection is tested on synthetic frames only. Real-world accuracy depends on lighting, camera angle and board condition, so expect to tune and to use manual correction occasionally. Tips: mount the phone steady, view the board square-on as far as possible, use even light without strong glare, and re-calibrate if the phone or board moves.
 ## Requirements
 
 - Android Studio with Android SDK 35 installed
@@ -34,7 +43,7 @@ The APK will be at `app/build/outputs/apk/debug/app-debug.apk` after a successfu
 
 ## Free/offline principles
 
-No login, backend, analytics SDK, paid API, subscription, or ad SDK is included. Gameplay is local. The camera feature asks for camera permission only when opened. Camera detection and model assets have not been added yet.
+No login, backend, analytics SDK, paid API, subscription, or ad SDK is included. Gameplay is local. The camera feature asks for camera permission only when opened. Camera frames are processed on-device and never stored or uploaded.
 
 ## Build an APK without installing Android Studio
 

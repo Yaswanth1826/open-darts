@@ -16,6 +16,14 @@ data class DartHit(val base: Int, val multiplier: Multiplier = Multiplier.SINGLE
         }
 
     val isDouble: Boolean get() = base != 0 && multiplier == Multiplier.DOUBLE
+    val isTreble: Boolean get() = base != 0 && multiplier == Multiplier.TRIPLE
+    val isBull: Boolean get() = base == 25
+
+    override fun toString(): String = when {
+        base == 0 -> "Miss"
+        base == 25 -> if (multiplier == Multiplier.DOUBLE) "Bull" else "25"
+        else -> (when (multiplier) { Multiplier.SINGLE -> "S"; Multiplier.DOUBLE -> "D"; Multiplier.TRIPLE -> "T" }) + base
+    }
 
     companion object {
         val MISS = DartHit(0)
