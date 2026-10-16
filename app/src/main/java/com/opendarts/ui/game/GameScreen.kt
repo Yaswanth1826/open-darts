@@ -58,8 +58,11 @@ import com.opendarts.ui.camera.CameraPermissionGate
 import com.opendarts.ui.camera.CameraPhase
 import com.opendarts.ui.camera.CameraStatus
 import com.opendarts.ui.camera.CameraView
+import com.opendarts.ui.camera.Guide
+import com.opendarts.ui.camera.GuideOverlay
 import com.opendarts.ui.camera.DebugCapture
 import com.opendarts.ui.camera.ScoringCamera
+import com.opendarts.ui.camera.TfliteDartNet
 import com.opendarts.vision.TrackerEvent
 import com.opendarts.vision.TrackerState
 
@@ -175,6 +178,8 @@ private fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Un
     var status by remember { mutableStateOf(CameraStatus()) }
     val markers = remember { mutableStateListOf<Point>() }
     var showManual by remember { mutableStateOf(false) }
+    var aligning by remember { mutableStateOf(false) }
+    var guide by remember { mutableStateOf(Guide()) }
     val camera = remember {
         ScoringCamera(
             store,
@@ -189,16 +194,27 @@ private fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Un
             },
             onStatus = { status = it },
             capture = DebugCapture(context),
+            net = TfliteDartNet.loadOrNull(context),
         ).also { if (session.manualCalibration) it.useManualCalibration() }
     }
     DisposableEffect(camera) { onDispose { camera.release() } }
+    DisposableEffect(aligning) {
+        camera.searchPaused = aligning
+        onDispose { camera.searchPaused = false }
+    }
 
     val landscape = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val controls: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (!game.isFinished && status.phase == CameraPhase.NOT_FOUND) NotFoundHelp(camera, onCalibrate)
-            TurnPanel(session, game, compact = true)
-            CameraControls(camera, status, onManual = { showManual = true })
+            if (aligning) {
+                AlignHelp(onLock = { camera.useGuide(guide); aligning = false }, onCancel = { aligning = false })
+            } else {
+                if (!game.isFinished && status.phase != CameraPhase.TRACKING) {
+                    NotFoundHelp(camera, notFound = status.phase == CameraPhase.NOT_FOUND, onAlign = { aligning = true }, onCalibrate = onCalibrate)
+                }
+                TurnPanel(session, game, compact = true)
+                CameraControls(camera, status, onManual = { showManual = true })
+            }
             DebugRow(camera)
         }
     }
@@ -208,11 +224,11 @@ private fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Un
         PlayerStrip(game)
         if (landscape) {
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                CameraBox(camera, status, markers, Modifier.weight(1.3f).fillMaxHeight())
+                CameraBox(camera, status, markers, aligning, guide, { guide = it }, Modifier.weight(1.3f).fillMaxHeight())
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { controls() }
             }
         } else {
-            CameraBox(camera, status, markers, Modifier.weight(1f).fillMaxWidth())
+            CameraBox(camera, status, markers, aligning, guide, { guide = it }, Modifier.weight(1f).fillMaxWidth())
             controls()
         }
     }
@@ -230,16 +246,16 @@ private fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Un
 }
 
 @Composable
-private fun CameraBox(camera: ScoringCamera, status: CameraStatus, markers: List<Point>, modifier: Modifier) {
+private fun CameraBox(camera: ScoringCamera, status: CameraStatus, markers: List<Point>, aligning: Boolean, guide: Guide, onGuide: (Guide) -> Unit, modifier: Modifier) {
     val portrait = LocalConfiguration.current.orientation != android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val aspect = if (status.frameWidth > 0) status.frameWidth.toFloat() / status.frameHeight else if (portrait) 0.75f else 1.3333f
     Box(modifier.clip(RoundedCornerShape(16.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
         CameraPermissionGate(Modifier.fillMaxSize()) {
             Box(Modifier.aspectRatio(aspect)) {
                 CameraView(Modifier.fillMaxSize(), onFrame = camera::onFrame)
-                BoardOverlay(status, markers, Modifier.fillMaxSize())
+                if (aligning) GuideOverlay(guide, onGuide, Modifier.fillMaxSize()) else BoardOverlay(status, markers, Modifier.fillMaxSize())
             }
-            StatusPill(status, Modifier.align(Alignment.TopCenter).padding(10.dp))
+            if (!aligning) StatusPill(status, Modifier.align(Alignment.TopCenter).padding(10.dp))
         }
     }
 }
@@ -253,7 +269,7 @@ private fun StatusPill(status: CameraStatus, modifier: Modifier) {
             TrackerState.WAITING_FOR_BOARD -> "Scanning the empty board \u2013 keep hands clear" to Color(0xFFFFC857)
             TrackerState.MOVING -> "Detecting\u2026" to Color(0xFFFFC857)
             TrackerState.SETTLING -> "Hold on\u2026" to Color(0xFFFFC857)
-            TrackerState.READY -> "Ready \u2013 throw!" + (if (status.darts > 0) "  \u00B7  ${status.darts} on board" else "") to Color(0xFF63E6BE)
+            TrackerState.READY -> "Ready \u2013 throw!" + (if (status.darts > 0) "  \u00B7  ${status.darts} on board" else "") + (if (status.usingAi) "  \u00B7  AI" else "") to Color(0xFF63E6BE)
         }
     }
     Surface(modifier, shape = RoundedCornerShape(50), color = Color(0xCC000000)) {
@@ -269,20 +285,43 @@ private fun CameraControls(camera: ScoringCamera, status: CameraStatus, onManual
             onClick = { camera.startNow() }, enabled = status.phase == CameraPhase.TRACKING,
             modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
         ) { Text("Board clear", maxLines = 1) }
-        FilledTonalButton(onClick = { camera.rotateBoard(-18.0) }, enabled = status.phase == CameraPhase.TRACKING, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) { Text("\u21BA") }
-        FilledTonalButton(onClick = { camera.rotateBoard(18.0) }, enabled = status.phase == CameraPhase.TRACKING, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) { Text("\u21BB") }
+        if (!status.usingAi) {
+            FilledTonalButton(onClick = { camera.rotateBoard(-18.0) }, enabled = status.phase == CameraPhase.TRACKING, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) { Text("\u21BA") }
+            FilledTonalButton(onClick = { camera.rotateBoard(18.0) }, enabled = status.phase == CameraPhase.TRACKING, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)) { Text("\u21BB") }
+        }
         Button(onClick = onManual, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)) { Text("Manual", maxLines = 1) }
     }
 }
 
 @Composable
-private fun NotFoundHelp(camera: ScoringCamera, onCalibrate: () -> Unit) {
+private fun NotFoundHelp(camera: ScoringCamera, notFound: Boolean, onAlign: () -> Unit, onCalibrate: () -> Unit) {
     Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Move the phone so the whole board is visible, square-on if possible, with even light and no glare.", style = MaterialTheme.typography.bodySmall)
+            Text(
+                if (notFound) "Can't find the board automatically. Fit the whole board in view, square-on, with even light and no glare - or line it up yourself."
+                else "Looking for the board. Taking long? Line it up yourself - it only takes a moment.",
+                style = MaterialTheme.typography.bodySmall,
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { camera.findBoardAgain() }, modifier = Modifier.weight(1f)) { Text("Try again") }
-                OutlinedButton(onClick = onCalibrate, modifier = Modifier.weight(1f)) { Text("Set up by hand") }
+                Button(onClick = onAlign, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp)) { Text("Align board", maxLines = 1) }
+                OutlinedButton(onClick = { camera.findBoardAgain() }, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp)) { Text("Try again", maxLines = 1) }
+                OutlinedButton(onClick = onCalibrate, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp)) { Text("4 taps", maxLines = 1) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlignHelp(onLock: () -> Unit, onCancel: () -> Unit) {
+    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "Drag the green circle onto the board and pinch to resize it until the outer ring sits on the outside edge of the doubles. The red line must point at the 20. Clear the board of darts first.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onLock, modifier = Modifier.weight(1f)) { Text("Lock board") }
+                OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Cancel") }
             }
         }
     }

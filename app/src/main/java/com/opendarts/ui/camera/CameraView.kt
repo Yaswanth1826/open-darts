@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.opendarts.vision.GrayFrame
 import java.util.concurrent.Executors
 
 /** Asks for the camera permission, then shows [content]. */
@@ -56,7 +55,7 @@ fun CameraPermissionGate(modifier: Modifier = Modifier, content: @Composable () 
  * greyscale frame, roughly 960x720). The preview is letter-boxed (FIT) so view coordinates map linearly to frame coordinates.
  */
 @Composable
-fun CameraView(modifier: Modifier = Modifier, onFrame: ((GrayFrame) -> Unit)? = null) {
+fun CameraView(modifier: Modifier = Modifier, onFrame: ((CameraFrame) -> Unit)? = null) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember {
@@ -85,7 +84,7 @@ fun CameraView(modifier: Modifier = Modifier, onFrame: ((GrayFrame) -> Unit)? = 
                 .build()
             analysis.setAnalyzer(executor) { image: ImageProxy ->
                 try {
-                    frameCallback?.let { callback -> callback(image.toUprightGray()) }
+                    frameCallback?.let { callback -> callback(CameraFrame(image.toUprightGray()) { image.toUprightColor() }) }
                 } finally {
                     image.close()
                 }

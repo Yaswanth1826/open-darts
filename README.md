@@ -58,3 +58,9 @@ This repository includes a GitHub Actions workflow at `.github/workflows/build-a
 7. Transfer `app-debug.apk` to your Android phone and install it. Android may ask you to allow installation from the file manager/browser you used.
 
 The APK is a debug build for testing. It is not a Play Store release. The cloud build runs on GitHub's hosted runner, so Android Studio and the Android SDK are not needed on your Windows PC.
+
+## AI dart detection (recommended)
+
+The app has two detection modes. If `app/src/main/assets/dartnet.tflite` exists, a small neural network (YOLOv8-nano) finds the four calibration points and the dart tips in every look, at any camera angle, with no calibration and no alignment. Without the file the app falls back to the classic detector.
+
+To create the model without your own GPU, open `training/darts_training.ipynb` in Google Colab (free T4 GPU) and follow the steps. It trains on the public [DeepDarts dataset](https://ieee-dataport.org/open-access/deepdarts-dataset) (check its terms for your use) and can include your own labelled pictures. Copy the resulting `dartnet.tflite` into `app/src/main/assets/` and rebuild.

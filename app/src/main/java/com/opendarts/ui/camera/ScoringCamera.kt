@@ -11,6 +11,9 @@ import com.opendarts.vision.DartTracker
 import com.opendarts.vision.GrayFrame
 import com.opendarts.vision.TrackerEvent
 import com.opendarts.vision.TrackerState
+import com.opendarts.vision.ml.DartNet
+import com.opendarts.vision.ml.MlDartTracker
+import com.opendarts.vision.ml.TwoPassDetector
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.cos
@@ -26,18 +29,29 @@ data class CameraStatus(
     val boardToPixel: Homography? = null,
     val frameWidth: Int = 0,
     val frameHeight: Int = 0,
+    /** True while the trained network is doing the detection. */
+    val usingAi: Boolean = false,
 )
 
 /**
- * Finds the board by itself (no taps), then runs frames through a [DartTracker] and posts events to the main thread.
- * Detection runs off the analysis thread, and the board is only accepted when two detections agree.
+ * Finds the board by itself (no taps) and turns camera frames into dart events on the main thread.
+ *
+ * With a trained network ([net]) every frame is not needed: the network is asked about twice a second and
+ * a dart counts once it is seen in two looks in a row. Without a network (or after the player lines the board
+ * up by hand) frames go through the classic [DartTracker] and the board is found by [BoardDetector].
  */
 class ScoringCamera(
     private val store: CalibrationStore,
     private val onEvent: (TrackerEvent) -> Unit,
     private val onStatus: (CameraStatus) -> Unit,
     private val capture: DebugCapture? = null,
+    private val net: DartNet? = null,
 ) {
+    private val mlTracker = net?.let { MlDartTracker(TwoPassDetector(it)::detect) }
+    @Volatile private var mlActive = net != null
+    private var lastLook = 0L
+    private var missedLooks = 0
+
     private val main = Handler(Looper.getMainLooper())
     private val detector = Executors.newSingleThreadExecutor()
     private val detecting = AtomicBoolean(false)
@@ -47,12 +61,13 @@ class ScoringCamera(
     @Volatile private var frameSize = 0 to 0
     @Volatile private var failedAttempts = 0
     @Volatile private var useStoredCalibration = false
-    private var pending: BoardFit? = null
+    private val pending = java.util.concurrent.CopyOnWriteArrayList<BoardFit>()
     private val resetRequested = AtomicBoolean(true)
     private val startRequested = AtomicBoolean(false)
     private val searchAgain = AtomicBoolean(false)
     private var lastStatus: CameraStatus? = null
-    @Volatile private var lastFrame: GrayFrame? = null
+    @Volatile private var lastFrame: CameraFrame? = null
+    @Volatile private var lastColor: com.opendarts.vision.ml.ColorFrame? = null
 
     /** Saves a frame with every detected dart, to study or tune detection later. */
     @Volatile var captureEveryDart = false
@@ -61,23 +76,49 @@ class ScoringCamera(
     fun saveFrame(label: String, onSaved: (String) -> Unit) {
         val frame = lastFrame
         if (frame == null || capture == null) { onSaved(""); return }
-        capture.save(frame, label, fit, emptyList()) { name -> main.post { onSaved(name) } }
+        capture.save(frame.gray, label, mlTracker?.boardToPixel?.takeIf { mlActive } ?: fit, emptyList(), lastColor) { name -> main.post { onSaved(name) } }
     }
 
     /** The next calm frame is taken as the empty board. */
-    fun boardIsEmpty() = resetRequested.set(true)
+    fun boardIsEmpty() {
+        resetRequested.set(true)
+        mlTracker?.markBoardEmpty()
+    }
 
     /** Takes the next frame as the empty board, however busy the scene is. */
-    fun startNow() = startRequested.set(true)
+    fun startNow() {
+        startRequested.set(true)
+        mlTracker?.markBoardEmpty()
+    }
+
+    /** Stops the automatic search while the player lines the board up by hand. */
+    @Volatile var searchPaused = false
+
+    /** Uses a board circle the player placed over the picture (assumes the board is seen roughly square-on). */
+    fun useGuide(guide: Guide) {
+        mlActive = false
+        val (w, h) = frameSize
+        if (w == 0) return
+        val scale = guide.radius * minOf(w, h) / BoardGeometry.DOUBLE_OUTER_RADIUS
+        val src = BoardGeometry.CALIBRATION_POINTS
+        val dst = src.map { Point(guide.x * w + scale * it.x, guide.y * h - scale * it.y) }
+        useStoredCalibration = false
+        failedAttempts = 0
+        pending.clear()
+        install(Homography.fromFourPoints(src, dst), w, h)
+    }
 
     /** Forgets the board and looks for it again. */
     fun findBoardAgain() {
+        mlActive = net != null
+        missedLooks = 0
         useStoredCalibration = false
         searchAgain.set(true)
     }
 
     /** Uses the four-tap calibration saved by the manual calibration screen. */
     fun useManualCalibration() {
+        mlActive = false
         useStoredCalibration = true
         searchAgain.set(true)
     }
@@ -94,25 +135,27 @@ class ScoringCamera(
         install(Homography.fromFourPoints(src, dst), w, h)
     }
 
-    fun onFrame(frame: GrayFrame) {
+    fun onFrame(camera: CameraFrame) {
+        lastFrame = camera
+        if (mlActive && mlTracker != null) { look(camera, mlTracker); return }
+        val frame = camera.gray
         if (searchAgain.getAndSet(false)) {
             tracker = null
             fit = null
-            pending = null
+            pending.clear()
             failedAttempts = 0
         }
-        lastFrame = frame
         val size = frame.width to frame.height
         if (size != frameSize) {
             frameSize = size
             tracker = null
             fit = null
-            pending = null
+            pending.clear()
         }
         var t = tracker
         if (t == null) {
             if (useStoredCalibration) tryStored(frame)
-            else if (detecting.compareAndSet(false, true)) detector.execute { search(frame) }
+            else if (!searchPaused && detecting.compareAndSet(false, true)) detector.execute { search(frame) }
             publish(CameraStatus(if (failedAttempts >= NOT_FOUND_AFTER) CameraPhase.NOT_FOUND else CameraPhase.FINDING_BOARD, frameWidth = frame.width, frameHeight = frame.height))
             return
         }
@@ -128,6 +171,33 @@ class ScoringCamera(
         }
     }
 
+    private fun look(camera: CameraFrame, tracker: MlDartTracker) {
+        val now = System.currentTimeMillis()
+        if (searchAgain.getAndSet(false)) { tracker.markBoardEmpty(); missedLooks = 0 }
+        if (now - lastLook < LOOK_INTERVAL_MS) return
+        lastLook = now
+        val colour = camera.color()
+        lastColor = colour
+        frameSize = colour.width to colour.height
+        resetRequested.set(false)
+        startRequested.set(false)
+        val events = tracker.process(colour)
+        val ready = tracker.state == com.opendarts.vision.TrackerState.READY
+        missedLooks = if (ready) 0 else missedLooks + 1
+        val phase = when {
+            ready -> CameraPhase.TRACKING
+            missedLooks >= NOT_FOUND_LOOKS -> CameraPhase.NOT_FOUND
+            else -> CameraPhase.FINDING_BOARD
+        }
+        publish(CameraStatus(phase, tracker.state, tracker.darts, tracker.boardToPixel, colour.width, colour.height, usingAi = true))
+        events.forEach { event ->
+            if (captureEveryDart && event is TrackerEvent.DartLanded) {
+                capture?.save(camera.gray, "ai-dart-${event.hit.multiplier.name}-${event.hit.base}", tracker.boardToPixel, listOf(event.pixel), colour)
+            }
+            main.post { onEvent(event) }
+        }
+    }
+
     private fun tryStored(frame: GrayFrame) {
         val normalised = store.load(frame.height >= frame.width)
         if (normalised == null) { failedAttempts = NOT_FOUND_AFTER; return }
@@ -138,23 +208,24 @@ class ScoringCamera(
     private fun search(frame: GrayFrame) {
         try {
             val found = runCatching { BoardDetector.detect(frame) }.getOrNull()
-            val previous = pending
+            if (tracker != null) return
             if (found == null) {
-                pending = null
+                pending.clear()
                 failedAttempts++
-            } else if (previous != null && found.differenceTo(previous) < AGREEMENT) {
+            } else if (pending.any { found.differenceTo(it) < AGREEMENT }) {
                 failedAttempts = 0
                 store.save(frame.height >= frame.width, found.normalisedCorners)
                 install(found.boardToPixel, frame.width, frame.height)
-                pending = null
+                pending.clear()
             } else {
-                pending = found
+                pending.add(found)
+                if (pending.size > 3) pending.removeAt(0)
+                failedAttempts++
             }
         } finally {
             detecting.set(false)
         }
     }
-
     private fun install(boardToPixel: Homography, width: Int, height: Int) {
         if (width == 0) return
         val created = runCatching { DartTracker(boardToPixel.inverse(), width, height) }.getOrNull() ?: return
@@ -172,6 +243,7 @@ class ScoringCamera(
 
     fun release() {
         detector.shutdown()
+        (net as? AutoCloseable)?.close()
         capture?.release()
     }
 
@@ -179,5 +251,7 @@ class ScoringCamera(
         /** Two detections must agree to within this share of the frame's shorter side. */
         const val AGREEMENT = 0.012
         const val NOT_FOUND_AFTER = 6
+        const val LOOK_INTERVAL_MS = 450L
+        const val NOT_FOUND_LOOKS = 8
     }
 }

@@ -70,6 +70,15 @@ object BoardGeometry {
         Point(DOUBLE_OUTER_RADIUS * sin(a), DOUBLE_OUTER_RADIUS * cos(a))
     }
 
+    /**
+     * Calibration points the neural network is trained to find (the DeepDarts convention): the outer edge of the
+     * double ring at the 5|20, 17|3, 8|11 and 13|6 wires, in the order cal_1..cal_4.
+     */
+    val MODEL_CALIBRATION_POINTS: List<Point> = listOf(19, 9, 14, 4).map { i ->
+        val a = Math.toRadians(wireAngle(i))
+        Point(DOUBLE_OUTER_RADIUS * sin(a), DOUBLE_OUTER_RADIUS * cos(a))
+    }
+
     /** Unit of the board outline used for drawing: 2*PI sampled points at the double outer radius. */
     fun outline(radius: Double = DOUBLE_OUTER_RADIUS, steps: Int = 72): List<Point> =
         (0 until steps).map { val a = 2 * PI * it / steps; Point(radius * sin(a), radius * cos(a)) }

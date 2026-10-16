@@ -12,6 +12,7 @@ import android.provider.MediaStore
 import com.opendarts.geometry.Homography
 import com.opendarts.geometry.Point
 import com.opendarts.vision.GrayFrame
+import com.opendarts.vision.ml.ColorFrame
 import java.io.File
 import java.io.OutputStream
 import java.text.SimpleDateFormat
@@ -27,11 +28,11 @@ import java.util.concurrent.Executors
 class DebugCapture(private val context: Context) {
     private val io = Executors.newSingleThreadExecutor()
 
-    fun save(frame: GrayFrame, label: String, fit: Homography?, darts: List<Point>, onSaved: (String) -> Unit = {}) {
+    fun save(frame: GrayFrame, label: String, fit: Homography?, darts: List<Point>, color: ColorFrame? = null, onSaved: (String) -> Unit = {}) {
         io.execute {
             val stamp = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date())
             val base = "$stamp-${label.filter { it.isLetterOrDigit() || it == '-' }.take(40)}"
-            val raw = toBitmap(frame)
+            val raw = color?.let(::toBitmap) ?: toBitmap(frame)
             val place = runCatching {
                 write("$base-raw.png", raw)
                 write("$base-marked.png", annotate(raw, fit, darts))
@@ -46,6 +47,13 @@ class DebugCapture(private val context: Context) {
         val pixels = IntArray(frame.width * frame.height) {
             val v = frame.pixels[it].toInt() and 0xFF
             Color.rgb(v, v, v)
+        }
+        return Bitmap.createBitmap(pixels, frame.width, frame.height, Bitmap.Config.ARGB_8888)
+    }
+
+    private fun toBitmap(frame: ColorFrame): Bitmap {
+        val pixels = IntArray(frame.width * frame.height) {
+            Color.rgb(frame.rgb[it * 3].toInt() and 0xFF, frame.rgb[it * 3 + 1].toInt() and 0xFF, frame.rgb[it * 3 + 2].toInt() and 0xFF)
         }
         return Bitmap.createBitmap(pixels, frame.width, frame.height, Bitmap.Config.ARGB_8888)
     }
