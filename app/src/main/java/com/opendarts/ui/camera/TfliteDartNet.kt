@@ -15,7 +15,9 @@ import java.nio.ByteOrder
  */
 class TfliteDartNet private constructor(private val interpreter: Interpreter) : DartNet, AutoCloseable {
     private val shape = interpreter.getInputTensor(0).shape()
-    override val inputSize: Int = shape[1]
+    /** Models are exported either as [1, H, W, 3] or, less often, as [1, 3, H, W]. */
+    private val channelsFirst = shape[1] == 3 && shape[3] != 3
+    override val inputSize: Int = if (channelsFirst) shape[2] else shape[1]
     private val outputShape = interpreter.getOutputTensor(0).shape()
     private val input = ByteBuffer.allocateDirect(inputSize * inputSize * 3 * 4).order(ByteOrder.nativeOrder())
     private val output = ByteBuffer.allocateDirect(outputShape.fold(1) { a, b -> a * b } * 4).order(ByteOrder.nativeOrder())
@@ -26,7 +28,12 @@ class TfliteDartNet private constructor(private val interpreter: Interpreter) : 
         input.rewind()
         val floats = input.asFloatBuffer()
         val rgb = image.rgb
-        for (i in rgb.indices) floats.put((rgb[i].toInt() and 0xFF) / 255f)
+        if (channelsFirst) {
+            val plane = inputSize * inputSize
+            for (c in 0 until 3) for (i in 0 until plane) floats.put((rgb[i * 3 + c].toInt() and 0xFF) / 255f)
+        } else {
+            for (i in rgb.indices) floats.put((rgb[i].toInt() and 0xFF) / 255f)
+        }
         output.rewind()
         interpreter.run(input, output)
         output.rewind()

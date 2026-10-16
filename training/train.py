@@ -37,11 +37,12 @@ def main():
     metrics = model.val(data=args.data, split="test", imgsz=args.imgsz)
     print("test mAP50:", metrics.box.map50)
 
-    best = YOLO(os.path.join(args.project, "dartnet", "weights", "best.pt"))
-    exported = best.export(format="tflite", imgsz=args.imgsz, half=True)
+    weights = str(model.trainer.best)
+    best = YOLO(weights)
+    exported = best.export(format="litert", imgsz=args.imgsz)
     tflite = str(exported) if str(exported).endswith(".tflite") else None
     if tflite is None or not os.path.exists(tflite):
-        found = glob.glob(os.path.join(args.project, "dartnet", "weights", "**", "*float16.tflite"), recursive=True)
+        found = glob.glob(os.path.join(os.path.dirname(weights), "**", "*.tflite"), recursive=True)
         tflite = found[0]
     shutil.copy(tflite, args.out)
     print("wrote", args.out, "-", round(os.path.getsize(args.out) / 1e6, 1), "MB")
