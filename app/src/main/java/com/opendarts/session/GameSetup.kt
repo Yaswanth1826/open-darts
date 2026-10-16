@@ -9,6 +9,7 @@ import com.opendarts.game.practice.AroundTheClockConfig
 import com.opendarts.game.practice.AroundTheClockGame
 import com.opendarts.game.practice.CountUpConfig
 import com.opendarts.game.practice.CountUpGame
+import com.opendarts.game.practice.JdcChallengeGame
 import com.opendarts.game.x01.X01Config
 import com.opendarts.game.x01.X01Game
 
@@ -17,6 +18,7 @@ enum class GameKind(val title: String, val blurb: String) {
     CRICKET("Cricket", "Close 15-20 and the bull. Standard, cut-throat or no-score."),
     AROUND_THE_CLOCK("Around the Clock", "Hit 1 to 20, then the bull. First to finish wins."),
     COUNT_UP("Count Up", "Score as much as you can over a set number of rounds."),
+    JDC_CHALLENGE("JDC Challenge", "Shanghai 10-15, every double and the bull, then Shanghai 15-20. Highest score wins."),
 }
 
 enum class InputMode { MANUAL, CAMERA }
@@ -38,6 +40,7 @@ data class GameSetup(
         GameKind.CRICKET -> CricketGame(players, CricketConfig(cricketMode))
         GameKind.AROUND_THE_CLOCK -> AroundTheClockGame(players, clock)
         GameKind.COUNT_UP -> CountUpGame(players, CountUpConfig(countUpRounds))
+        GameKind.JDC_CHALLENGE -> JdcChallengeGame(players)
     }
 
     val subtitle: String
@@ -47,6 +50,7 @@ data class GameSetup(
             GameKind.CRICKET -> cricketMode.name.lowercase().replace('_', '-')
             GameKind.AROUND_THE_CLOCK -> if (clock.doublesOnly) "doubles only" else if (clock.skipOnMultiplier) "doubles & trebles skip" else "standard"
             GameKind.COUNT_UP -> "$countUpRounds rounds"
+            GameKind.JDC_CHALLENGE -> "19 rounds · 57 darts"
         }
 }
 

@@ -91,4 +91,22 @@ class DartTrackerTest {
         val events = landed(t.feed(listOf(Point(0.0, -185.0))))
         assertEquals(DartHit.MISS, events.single().hit)
     }
+
+    @Test fun startsAndScoresOnANoisyCameraFeed() {
+        val noisy = SyntheticScene(noise = 9.0)
+        val t = DartTracker(noisy.imageToBoard, noisy.width, noisy.height)
+        repeat(60) { t.process(noisy.render()) }
+        assertEquals(TrackerState.READY, t.state)
+        val target = DartHit.treble(19)
+        val events = (0 until 10).flatMap { t.process(noisy.render(listOf(BoardGeometry.centreOf(target)))) }
+        assertEquals(target, landed(events).singleOrNull()?.hit)
+    }
+
+    @Test fun startNowAcceptsTheNextFrameAsTheEmptyBoard() {
+        val t = tracker()
+        t.process(scene.render(hand = intArrayOf(100, 100, 300, 300)))
+        t.startNow()
+        t.process(scene.render(hand = intArrayOf(120, 100, 300, 300)))
+        assertEquals(TrackerState.READY, t.state)
+    }
 }

@@ -32,15 +32,13 @@ import com.opendarts.session.GameSession
 import com.opendarts.session.GameSetup
 import com.opendarts.session.InputMode
 import com.opendarts.session.PlayerStore
-import com.opendarts.ui.camera.CalibrationStore
 
 private const val MAX_PLAYERS = 8
 
 @Composable
-fun SetupScreen(session: GameSession, onStart: () -> Unit, onBack: () -> Unit, onCalibrate: () -> Unit) {
+fun SetupScreen(session: GameSession, onStart: () -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
     val players = remember { PlayerStore(context) }
-    val calibration = remember { CalibrationStore(context) }
     val setup = session.draft
     fun update(new: GameSetup) { session.draft = new }
 
@@ -95,25 +93,21 @@ fun SetupScreen(session: GameSession, onStart: () -> Unit, onBack: () -> Unit, o
                 Label("Rounds")
                 Chips(listOf(3, 5, 8, 10, 15), setup.countUpRounds, { it.toString() }) { update(setup.copy(countUpRounds = it)) }
             }
+            GameKind.JDC_CHALLENGE -> Text("Fixed format: 57 darts over 19 rounds. Max score 3,380.", style = MaterialTheme.typography.bodySmall)
         }
 
         Section("Scoring")
         Chips(InputMode.values().toList(), setup.input, { if (it == InputMode.CAMERA) "Camera (auto)" else "Manual (tap)" }) { update(setup.copy(input = it)) }
         if (setup.input == InputMode.CAMERA) {
             Text(
-                if (calibration.hasAny()) "Camera calibrated. You can still correct any dart by hand."
-                else "The camera needs a one-time calibration (about 30 seconds).",
+                "Put the phone on a stand facing the board, with the whole board in view. The app finds the board by itself - no calibration needed. You can still correct any dart by hand.",
                 style = MaterialTheme.typography.bodySmall,
             )
-            OutlinedButton(onClick = onCalibrate) { Text(if (calibration.hasAny()) "Recalibrate camera" else "Calibrate camera") }
         }
-
         Button(
             onClick = { players.save(setup.playerNames); session.start(setup); onStart() },
             modifier = Modifier.fillMaxWidth(),
-            enabled = setup.input != InputMode.CAMERA || calibration.hasAny(),
         ) { Text("Start game") }
-        if (setup.input == InputMode.CAMERA && !calibration.hasAny()) Text("Calibrate the camera to start in camera mode.", style = MaterialTheme.typography.bodySmall)
     }
 }
 

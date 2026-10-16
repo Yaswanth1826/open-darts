@@ -55,12 +55,16 @@ class DartTracker(
     private var calm = 0
     private var evaluated = false
     private var awaitingBoard = true
+    private var waitingFrames = 0
+    private var forceBaseline = false
     private val known = ArrayList<DartBlob>()
 
     var state: TrackerState = TrackerState.WAITING_FOR_BOARD
         private set
 
     val darts: Int get() = known.size
+
+    private companion object { const val NOISE_MARGIN = 4.5 }
 
     init {
         require(width > 0 && height > 0) { "frame size must be positive" }
@@ -84,18 +88,41 @@ class DartTracker(
         state = TrackerState.WAITING_FOR_BOARD
         calm = 0
         evaluated = false
+        waitingFrames = 0
+        forceBaseline = false
+    }
+
+    /** Takes the very next frame as the empty-board reference, however busy the scene looks. */
+    fun startNow() {
+        markBoardEmpty()
+        forceBaseline = true
     }
 
     fun process(frame: GrayFrame): List<TrackerEvent> {
         require(frame.width == width && frame.height == height) { "frame size changed" }
-        val current = IntArray(width * height) { frame.pixels[it].toInt() and 0xFF }
+        val current = smooth(frame)
         val prev = previous
         previous = current
         if (prev == null) return emptyList()
 
-        if (changed(current, prev, 0) > config.motionFraction * roiCount) {
+        if (awaitingBoard && forceBaseline) {
+            forceBaseline = false
+            baseline = current
+            background = current
+            awaitingBoard = false
+            evaluated = true
+            calm = config.stableFrames
+            state = TrackerState.READY
+            return emptyList()
+        }
+
+        // While waiting for the first reference, tolerate more and more flicker so a slightly noisy scene still starts.
+        val allowance = if (awaitingBoard) config.motionFraction * (1 shl minOf(waitingFrames / 20, 5)) else config.motionFraction
+        threshold = adaptiveThreshold(current, prev)
+        if (changed(current, prev, 0) > allowance * roiCount) {
             calm = 0
             evaluated = false
+            if (awaitingBoard) waitingFrames++
             state = if (awaitingBoard) TrackerState.WAITING_FOR_BOARD else TrackerState.MOVING
             return emptyList()
         }
@@ -124,7 +151,7 @@ class DartTracker(
         val mask = BooleanArray(width * height)
         var changedPixels = 0
         for (i in current.indices) {
-            if (roi[i] && abs(current[i] - bg[i] - offset) > config.diffThreshold) {
+            if (roi[i] && abs(current[i] - bg[i] - offset) > threshold) {
                 mask[i] = true
                 changedPixels++
             }
@@ -164,9 +191,50 @@ class DartTracker(
         return events
     }
 
+    /** Grey-level change counted as real: the configured minimum, or several times the camera noise if that is larger. */
+    private var threshold = config.diffThreshold
+
+    private fun adaptiveThreshold(a: IntArray, b: IntArray): Int {
+        val histogram = IntArray(256)
+        var n = 0
+        var i = 0
+        while (i < a.size) {
+            if (roi[i]) { histogram[minOf(255, abs(a[i] - b[i]))]++; n++ }
+            i += 11
+        }
+        if (n == 0) return config.diffThreshold
+        var acc = 0
+        var median = 0
+        while (median < 255) { acc += histogram[median]; if (acc * 2 >= n) break; median++ }
+        val sigma = median / 0.6745
+        return maxOf(config.diffThreshold, (NOISE_MARGIN * sigma).toInt())
+    }
+
+    /** 3x3 box blur: averages away sensor noise while keeping a dart barrel visible. */
+    private fun smooth(frame: GrayFrame): IntArray {
+        val src = frame.pixels
+        val horizontal = IntArray(width * height)
+        for (y in 0 until height) {
+            val row = y * width
+            for (x in 0 until width) {
+                val l = if (x > 0) src[row + x - 1].toInt() and 0xFF else src[row + x].toInt() and 0xFF
+                val r = if (x < width - 1) src[row + x + 1].toInt() and 0xFF else src[row + x].toInt() and 0xFF
+                horizontal[row + x] = l + (src[row + x].toInt() and 0xFF) + r
+            }
+        }
+        val out = IntArray(width * height)
+        for (y in 0 until height) {
+            val up = (if (y > 0) y - 1 else y) * width
+            val down = (if (y < height - 1) y + 1 else y) * width
+            val row = y * width
+            for (x in 0 until width) out[row + x] = (horizontal[up + x] + horizontal[row + x] + horizontal[down + x]) / 9
+        }
+        return out
+    }
+
     private fun changed(a: IntArray, b: IntArray, offset: Int): Int {
         var n = 0
-        for (i in a.indices) if (roi[i] && abs(a[i] - b[i] - offset) > config.diffThreshold) n++
+        for (i in a.indices) if (roi[i] && abs(a[i] - b[i] - offset) > threshold) n++
         return n
     }
 

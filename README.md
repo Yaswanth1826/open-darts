@@ -7,7 +7,7 @@ Open Darts is a free, offline-first Android darts companion. It supports multipl
 - **Games:** X01 (101-1001, straight/double/master in and out, legs and sets, checkout suggestions), Cricket (standard, cut-throat, no-score), Around the Clock (with skip and doubles-only variants) and Count Up.
 - **Multiplayer:** 1-8 players on one device, saved player names, per-turn undo, averages and highest visits.
 - **Manual scoring:** tap a regulation-accurate dartboard or use the number pad.
-- **Camera scoring:** point the phone at the board, calibrate once by tapping four reference wires, and darts are detected and scored automatically. Any dart can be corrected by hand (Undo, then tap the board) and a Miss / Next player button covers bounce-outs.
+- **Camera scoring:** point the phone at the board, the app finds the board automatically (no calibration taps), and darts are detected and scored automatically. "Rescan board" and a manual four-tap setup are available as fallbacks. Any dart can be corrected by hand (Undo, then tap the board) and a Miss / Next player button covers bounce-outs.
 
 ## Architecture
 
@@ -16,7 +16,7 @@ Open Darts is a free, offline-first Android darts companion. It supports multipl
 
 ## Camera accuracy
 
-Detection is tested on synthetic frames only. Real-world accuracy depends on lighting, camera angle and board condition, so expect to tune and to use manual correction occasionally. Tips: mount the phone steady, view the board square-on as far as possible, use even light without strong glare, and re-calibrate if the phone or board moves.
+Detection is tested on synthetic frames only. Real-world accuracy depends on lighting, camera angle and board condition, so expect to tune and to use manual correction occasionally. Tips: mount the phone steady, view the board square-on as far as possible, use even light without strong glare, keep the 20 roughly at the top, and tap Rescan if the phone or board moves.
 ## Requirements
 
 - Android Studio with Android SDK 35 installed

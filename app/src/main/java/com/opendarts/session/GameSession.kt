@@ -23,6 +23,8 @@ class GameSession : ViewModel() {
     var message by mutableStateOf("")
         private set
     var dismissedResult by mutableStateOf(false)
+    /** Set once the user calibrated by hand; the camera then uses that instead of searching for the board. */
+    var manualCalibration by mutableStateOf(false)
 
     val isRunning: Boolean get() = game != null
 

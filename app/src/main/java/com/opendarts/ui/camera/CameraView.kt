@@ -63,6 +63,7 @@ fun CameraView(modifier: Modifier = Modifier, onFrame: ((GrayFrame) -> Unit)? = 
         PreviewView(context).apply {
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
             scaleType = PreviewView.ScaleType.FIT_CENTER
+            keepScreenOn = true
         }
     }
     val frameCallback by rememberUpdatedState(onFrame)

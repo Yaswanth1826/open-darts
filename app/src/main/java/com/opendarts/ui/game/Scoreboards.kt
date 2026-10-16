@@ -27,6 +27,8 @@ import com.opendarts.game.engine.DartGame
 import com.opendarts.game.practice.AroundTheClockGame
 import com.opendarts.game.practice.CLOCK_BULL_INDEX
 import com.opendarts.game.practice.CountUpGame
+import com.opendarts.game.practice.JdcChallengeGame
+import com.opendarts.game.practice.JdcPart
 import com.opendarts.game.x01.Checkout
 import com.opendarts.game.x01.InOut
 import com.opendarts.game.x01.X01Game
@@ -38,6 +40,7 @@ fun Scoreboard(game: DartGame<*>) {
         is CricketGame -> CricketBoard(game)
         is AroundTheClockGame -> ClockBoard(game)
         is CountUpGame -> CountUpBoard(game)
+        is JdcChallengeGame -> JdcBoard(game)
     }
 }
 
@@ -154,4 +157,53 @@ private fun CountUpBoard(game: CountUpGame) {
             }
         }
     }
+}
+@Composable
+private fun JdcBoard(game: JdcChallengeGame) {
+    val target = game.currentTarget
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            if (target == null) "Challenge complete" else "Round ${game.round} of ${JdcChallengeGame.TOTAL_ROUNDS} \u00B7 aim at ${target.label}",
+            style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold,
+        )
+        game.players.forEachIndexed { i, player ->
+            val p = game.gameState.players[i]
+            val active = i == game.currentPlayerIndex && !game.isFinished
+            PlayerCard(active) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(player.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "10-15: ${p.part(JdcPart.SHANGHAI_LOW)} \u00B7 Doubles: ${p.part(JdcPart.DOUBLES)} \u00B7 15-20: ${p.part(JdcPart.SHANGHAI_HIGH)}" +
+                                if (p.shanghais > 0) " \u00B7 Shanghais ${p.shanghais}" else "",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        )
+                    }
+                    Text(p.total.toString(), fontSize = 40.sp, fontWeight = FontWeight.Black,
+                        color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        }
+    }
+}
+
+/** Big number and small caption per player, for the compact strip shown over the camera. */
+fun headline(game: DartGame<*>, index: Int): Pair<String, String> = when (game) {
+    is X01Game -> {
+        val p = game.gameState.players[index]
+        val legs = if (game.config.legsToWin > 1 || game.config.setsToWin > 1) "L${p.legs}" + (if (game.config.setsToWin > 1) " S${p.sets}" else "") + " \u00B7 " else ""
+        p.remaining.toString() to "${legs}Avg ${"%.1f".format(p.average)}"
+    }
+    is CricketGame -> {
+        val p = game.gameState.players[index]
+        val closed = CRICKET_NUMBERS.count { p.isClosed(it) }
+        (if (game.config.mode == CricketMode.NO_SCORE) closed.toString() else p.points.toString()) to "$closed/7 closed"
+    }
+    is AroundTheClockGame -> {
+        val target = game.gameState.targets[index]
+        (when { target > CLOCK_BULL_INDEX -> "\u2713"; target == CLOCK_BULL_INDEX -> "BULL"; else -> target.toString() }) to "next"
+    }
+    is CountUpGame -> game.gameState.scores[index].toString() to "points"
+    is JdcChallengeGame -> game.gameState.players[index].total.toString() to "total"
+    else -> "" to ""
 }

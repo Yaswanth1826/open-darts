@@ -15,7 +15,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,27 +53,25 @@ fun OpenDartsApp() {
         when (page) {
             Page.HOME -> HomeScreen(
                 onPick = { kind -> session.draft = session.draft.copy(kind = kind); page = Page.SETUP },
-                onCalibrate = { returnTo = Page.HOME; page = Page.CALIBRATE },
                 onResume = if (session.isRunning) ({ page = Page.GAME }) else null,
             )
             Page.SETUP -> SetupScreen(
                 session,
                 onStart = { page = Page.GAME },
                 onBack = { page = Page.HOME },
-                onCalibrate = { returnTo = Page.SETUP; page = Page.CALIBRATE },
             )
             Page.GAME -> GameScreen(
                 session,
                 onExit = { session.leave(); page = Page.HOME },
                 onCalibrate = { returnTo = Page.GAME; page = Page.CALIBRATE },
             )
-            Page.CALIBRATE -> CalibrationScreen(onDone = { page = returnTo }, onCancel = { page = returnTo })
+            Page.CALIBRATE -> CalibrationScreen(onDone = { session.manualCalibration = true; page = returnTo }, onCancel = { page = returnTo })
         }
     }
 }
 
 @Composable
-private fun HomeScreen(onPick: (GameKind) -> Unit, onCalibrate: () -> Unit, onResume: (() -> Unit)?) {
+private fun HomeScreen(onPick: (GameKind) -> Unit, onResume: (() -> Unit)?) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -93,12 +90,6 @@ private fun HomeScreen(onPick: (GameKind) -> Unit, onCalibrate: () -> Unit, onRe
                 }
             }
         }
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Camera scoring", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("Set your phone up facing the board, calibrate once, then pick Camera when you start a game.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
-                OutlinedButton(onClick = onCalibrate, modifier = Modifier.fillMaxWidth()) { Text("Calibrate camera") }
-            }
-        }
+        Text("Camera scoring needs no setup: choose a game, pick Camera and point the phone at your board.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f))
     }
 }
