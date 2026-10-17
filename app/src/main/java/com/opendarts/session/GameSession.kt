@@ -7,6 +7,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import com.opendarts.game.engine.DartGame
 import com.opendarts.game.engine.DartTrace
+import com.opendarts.game.engine.GameAction
+import com.opendarts.game.engine.GameLog
 import com.opendarts.game.engine.TurnTrace
 import com.opendarts.game.engine.Outcome
 import com.opendarts.game.model.DartHit
@@ -19,7 +21,7 @@ class GameSession : ViewModel() {
     /** The setup being edited on the setup screen. */
     var draft by mutableStateOf(GameSetup())
 
-    var game: DartGame<*>? = null
+    var game: DartGame<*>? by mutableStateOf(null)
         private set
     var revision by mutableIntStateOf(0)
         private set
@@ -32,15 +34,42 @@ class GameSession : ViewModel() {
     /** Where each dart of the turn on screen was seen, and which ones hide behind another. */
     private val trace = TurnTrace()
 
+    /** Everything played so far, saved after every change so an unfinished game survives the app being closed. */
+    private val log = GameLog()
+    private var saver: GameSaver? = null
+
+    /** Connects the place unfinished games are kept and picks up the game that was saved there, if none is running. */
+    fun attach(saver: GameSaver) {
+        this.saver = saver
+        if (game != null) return
+        val (saved, savedLog) = saver.load() ?: return
+        val restored = runCatching { saved.buildGame().also { savedLog.replay(it) } }.getOrNull()
+        if (restored == null) { saver.clear(); return }
+        setup = saved
+        game = restored
+        log.clear()
+        savedLog.actions.forEach(log::add)
+        trace.sync(restored.turnHits.size)
+        message = "Welcome back \u2013 ${restored.currentPlayer.name} to throw"
+        dismissedResult = false
+        revision++
+    }
+
+    private fun changed() {
+        revision++
+        if (game != null) saver?.save(setup, log)
+    }
+
     val isRunning: Boolean get() = game != null
 
     fun start(newSetup: GameSetup) {
         setup = newSetup
         game = newSetup.buildGame()
+        log.clear()
         trace.sync(0)
         message = "${game!!.currentPlayer.name} to throw"
         dismissedResult = false
-        revision++
+        changed()
     }
 
     fun rematch() = start(setup)
@@ -48,11 +77,14 @@ class GameSession : ViewModel() {
     /** Switches between camera and keypad scoring in the middle of a game. */
     fun switchInput(mode: InputMode) {
         setup = setup.copy(input = mode)
-        revision++
+        changed()
     }
 
+    /** Quits for good: the unfinished game is thrown away. (Leaving the screen with Back keeps it for Resume.) */
     fun leave() {
         game = null
+        log.clear()
+        saver?.clear()
         revision++
     }
 
@@ -61,6 +93,7 @@ class GameSession : ViewModel() {
         if (g.isFinished) return
         val thrower = g.currentPlayer.name
         val outcome = g.throwDart(hit)
+        log.add(GameAction.Throw(hit))
         trace.landed(g.turnHits.size, DartTrace(spot, behind))
         val source = if (fromCamera) "Camera: " else ""
         message = source + when (outcome) {
@@ -72,36 +105,38 @@ class GameSession : ViewModel() {
             Outcome.NO_SCORE -> "$thrower: $hit"
             else -> "$thrower: $hit"
         }
-        revision++
+        changed()
     }
 
     fun undo() {
         val g = game ?: return
-        message = if (g.undo()) "Last dart removed" else "Nothing to undo"
+        message = if (g.undo()) { log.add(GameAction.Undo); "Last dart removed" } else "Nothing to undo"
         trace.sync(g.turnHits.size)
         dismissedResult = false
-        revision++
+        changed()
     }
 
     fun nextPlayer() {
         val g = game ?: return
         if (g.isFinished) return
         g.endTurn()
+        log.add(GameAction.NextTurn)
         trace.sync(0)
         message = "${g.currentPlayer.name} to throw"
-        revision++
+        changed()
     }
 
     /** Goes back to the previous player's turn, keeping their darts so they can be corrected. */
     fun previousPlayer() {
         val g = game ?: return
         if (g.previousPlayer()) {
+            log.add(GameAction.Previous)
             trace.sync(0)
             trace.sync(g.turnHits.size)
             message = "Back to ${g.currentPlayer.name}"
             dismissedResult = false
         } else message = "Already at the first turn"
-        revision++
+        changed()
     }
 
     /** True when the camera saw dart [index] and nothing recorded as hidden sits behind it, so a look behind it makes sense. */
@@ -116,8 +151,10 @@ class GameSession : ViewModel() {
         val g = game ?: return null
         val spot = trace.spotOf(index)
         val done = when {
-            index < g.turnHits.size -> g.editDart(index, hit)
-            hit != null && index == g.turnHits.size && !g.isFinished -> { g.throwDart(hit); trace.landed(g.turnHits.size, DartTrace(null)); true }
+            index < g.turnHits.size -> g.editDart(index, hit).also { if (it) log.add(GameAction.Edit(index, hit)) }
+            hit != null && index == g.turnHits.size && !g.isFinished -> {
+                g.throwDart(hit); log.add(GameAction.Throw(hit)); trace.landed(g.turnHits.size, DartTrace(null)); true
+            }
             else -> false
         }
         if (!done) return null
@@ -129,7 +166,7 @@ class GameSession : ViewModel() {
             else -> "${g.currentPlayer.name}: dart ${index + 1} is $hit"
         }
         dismissedResult = false
-        revision++
+        changed()
         return if (hit == null && lookBehind) spot else null
     }
 
@@ -139,10 +176,11 @@ class GameSession : ViewModel() {
         val hit = g.turnHits.getOrNull(front) ?: return
         if (slot != g.turnHits.size || g.isFinished) return
         g.throwDart(hit)
+        log.add(GameAction.Throw(hit))
         trace.landed(g.turnHits.size, DartTrace(null, behind = front))
         message = "${g.currentPlayer.name}: dart ${slot + 1} is $hit, behind dart ${front + 1}"
         dismissedResult = false
-        revision++
+        changed()
     }
 
     /** Called when the camera sees the board cleared: hands over only if the current player actually threw. */

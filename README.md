@@ -5,7 +5,7 @@ Open Darts is a free, offline-first Android darts companion. It supports multipl
 ## Features
 
 - **Games:** X01 (101-1001, straight/double/master in and out, legs and sets, checkout suggestions), Cricket (standard, cut-throat, no-score), Around the Clock (with skip and doubles-only variants) and Count Up.
-- **Multiplayer:** 1-8 players on one device, saved player names, per-turn undo, averages and highest visits.
+- **Multiplayer:** 1-8 players on one device, saved player names, per-turn undo, averages and highest visits. An unfinished game is saved after every dart: press Back to pause it and pick it up again with "Resume game" on the home screen, even after the app was closed.
 - **Home and flow:** four colour-coded categories (X01, Cricket, Practice, Party), a player picker with a tick-to-select roster, and a rules sheet (match mode, in/out, scoring method) before every game.
 - **Manual scoring:** a full keypad (miss, bulls, singles, doubles and trebles) with Undo and Next player. The AI button in the game header switches between camera and keypad at any time.
 - **Camera scoring:** point the phone at the board, the app finds the board automatically (no calibration taps), and darts are detected and scored automatically. "Rescan board", "Align board by hand" and a four-tap setup are in the game menu as fallbacks. Any dart can be corrected by hand (Undo, then switch to the keypad) and a Miss / Next player button covers bounce-outs.

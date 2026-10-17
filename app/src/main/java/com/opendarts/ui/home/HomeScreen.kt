@@ -45,7 +45,7 @@ import com.opendarts.ui.theme.CondensedRegular
 import com.opendarts.ui.theme.Palette
 
 @Composable
-fun HomeScreen(onCategory: (Category) -> Unit, onQuick: () -> Unit, onResume: (() -> Unit)?) {
+fun HomeScreen(onCategory: (Category) -> Unit, onQuick: () -> Unit, onResume: (() -> Unit)?, resumeDetail: String = "") {
     var menu by remember { mutableStateOf(false) }
     var tips by remember { mutableStateOf(false) }
     ScreenBox(Palette.Night) {
@@ -72,7 +72,7 @@ fun HomeScreen(onCategory: (Category) -> Unit, onQuick: () -> Unit, onResume: ((
                 Tile("PRACTICE", Brush.linearGradient(listOf(Palette.Amber, Palette.Orange)), Modifier.weight(1f)) { onCategory(Category.PRACTICE) }
                 Tile("PARTY", Brush.linearGradient(listOf(Palette.Teal, Color(0xFF2F7FD1), Color(0xFFE9C546))), Modifier.weight(1f)) { onCategory(Category.PARTY) }
             }
-            if (onResume != null) WideCard("RESUME GAME", "Pick up the game in progress.", highlight = true, onClick = onResume)
+            if (onResume != null) WideCard("RESUME GAME", resumeDetail.ifBlank { "Pick up the game in progress." }, highlight = true, onClick = onResume)
             WideCard("QUICK GAME", "501 scored by the camera, two players.", onClick = onQuick)
             WideCard("CAMERA SETUP TIPS", "Place the phone so the AI reads every dart.", onClick = { tips = true })
             Text(

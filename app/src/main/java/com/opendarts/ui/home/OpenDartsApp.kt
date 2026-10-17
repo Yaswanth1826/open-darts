@@ -5,17 +5,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.opendarts.game.x01.X01Config
 import com.opendarts.session.Category
 import com.opendarts.session.GameKind
 import com.opendarts.session.GameSession
 import com.opendarts.session.GameSetup
+import com.opendarts.session.GameStore
 import com.opendarts.session.category
 import com.opendarts.ui.camera.CalibrationScreen
 import com.opendarts.ui.game.GameScreen
@@ -26,6 +29,8 @@ private enum class Page { HOME, CATEGORY, SETUP, GAME, CALIBRATE }
 @Composable
 fun OpenDartsApp() {
     val session: GameSession = viewModel()
+    val context = LocalContext.current
+    LaunchedEffect(session) { session.attach(GameStore(context.applicationContext)) }
     var page by rememberSaveable { mutableStateOf(Page.HOME) }
     var setupFrom by rememberSaveable { mutableStateOf(Page.HOME) }
     var returnTo by rememberSaveable { mutableStateOf(Page.HOME) }
@@ -49,6 +54,9 @@ fun OpenDartsApp() {
                     setupFrom = Page.HOME; page = Page.SETUP
                 },
                 onResume = if (session.isRunning) ({ page = Page.GAME }) else null,
+                resumeDetail = session.game?.let { g ->
+                    "${session.setup.title} \u00B7 ${g.players.joinToString(" vs ") { it.name }} \u00B7 round ${g.round}"
+                } ?: "",
             )
             Page.CATEGORY -> CategoryScreen(
                 category,

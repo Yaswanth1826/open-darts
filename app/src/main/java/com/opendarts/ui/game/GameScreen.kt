@@ -196,6 +196,7 @@ fun GameTopBar(
     ObserveGame()
     var menu by remember { mutableStateOf(false) }
     var board by remember { mutableStateOf(false) }
+    var confirmQuit by remember { mutableStateOf(false) }
     val camera = session.setup.input == InputMode.CAMERA
     val configuration = LocalConfiguration.current
     val wide = configuration.screenWidthDp >= 600
@@ -208,7 +209,7 @@ fun GameTopBar(
                 DropdownMenuItem(text = { Text("Scoreboard") }, onClick = { menu = false; board = true })
                 DropdownMenuItem(text = { Text("Undo last dart") }, enabled = game.canUndo, onClick = { menu = false; session.undo() })
                 extraMenu { menu = false }
-                DropdownMenuItem(text = { Text("Quit game") }, onClick = { menu = false; onExit() })
+                DropdownMenuItem(text = { Text("Quit game") }, onClick = { menu = false; if (game.canUndo && !game.isFinished) confirmQuit = true else onExit() })
             }
         }
         SquareButton(onClick = { session.switchInput(if (camera) InputMode.MANUAL else InputMode.CAMERA) }, size = side) {
@@ -233,6 +234,15 @@ fun GameTopBar(
         } else {
             SquareButton(onClick = { board = true }, size = side) { Icon(Icons.AutoMirrored.Filled.List, "Scoreboard", tint = Palette.Ink) }
         }
+    }
+    if (confirmQuit) {
+        AlertDialog(
+            onDismissRequest = { confirmQuit = false },
+            title = { Text("Quit this game?") },
+            text = { Text("The game will be lost. To pause it instead, press Back: it waits under Resume game on the home screen, even if the app is closed.") },
+            confirmButton = { TextButton(onClick = { confirmQuit = false; onExit() }) { Text("Quit game") } },
+            dismissButton = { TextButton(onClick = { confirmQuit = false }) { Text("Keep playing") } },
+        )
     }
     if (board) {
         ModalBottomSheet(onDismissRequest = { board = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
