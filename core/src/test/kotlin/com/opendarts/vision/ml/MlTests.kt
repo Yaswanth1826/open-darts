@@ -242,6 +242,27 @@ class MlDartTrackerTest {
     }
 
     @Test
+    fun scoresTheDartThatWasHidingBehindOneThatIsReleased() {
+        val hit = DartHit(20, Multiplier.TRIPLE)
+        visible = listOf(pixelOf(hit))
+        repeat(2) { look() }
+        val spot = BoardGeometry.centreOf(hit)
+        assertTrue(tracker.releaseAt(spot))
+        assertEquals(0, tracker.darts)
+        assertTrue(look().isEmpty())
+        assertEquals(hit, landed(look()).single().hit)
+        assertEquals(1, tracker.darts)
+    }
+
+    @Test
+    fun releasingAnEmptySpotDoesNothing() {
+        visible = listOf(pixelOf(DartHit(20, Multiplier.TRIPLE)))
+        repeat(2) { look() }
+        assertEquals(false, tracker.releaseAt(BoardGeometry.centreOf(DartHit(3, Multiplier.SINGLE))))
+        assertEquals(1, tracker.darts)
+    }
+
+    @Test
     fun doesNotScoreTheSameDartTwice() {
         visible = listOf(pixelOf(DartHit(19, Multiplier.SINGLE)))
         repeat(2) { look() }

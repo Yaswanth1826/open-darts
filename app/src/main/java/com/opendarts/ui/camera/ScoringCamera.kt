@@ -112,6 +112,13 @@ class ScoringCamera(
         install(Homography.fromFourPoints(src, dst), w, h)
     }
 
+    private val releases = java.util.concurrent.ConcurrentLinkedQueue<Point>()
+
+    /** A dart at [board] (millimetres) was taken out by the player because another is hiding behind it: score what is still seen there. */
+    fun releaseSpot(board: Point) {
+        releases.add(board)
+    }
+
     /** Forgets the board and looks for it again. */
     fun findBoardAgain() {
         mlActive = net != null
@@ -195,6 +202,7 @@ class ScoringCamera(
         frameSize = colour.width to colour.height
         resetRequested.set(false)
         startRequested.set(false)
+        while (true) tracker.releaseAt(releases.poll() ?: break)
         val events = tracker.process(colour)
         val ready = tracker.state == com.opendarts.vision.TrackerState.READY
         missedLooks = if (ready) 0 else missedLooks + 1

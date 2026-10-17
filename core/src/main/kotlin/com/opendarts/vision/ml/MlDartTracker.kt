@@ -57,6 +57,17 @@ class MlDartTracker(
         candidates.clear()
     }
 
+    /**
+     * The player says another dart is hiding behind the one at [board]: forget that dart, so whatever is still seen
+     * at the spot is scored as a new dart once it has been seen twice. Returns false if no dart was known there.
+     */
+    fun releaseAt(board: Point): Boolean {
+        val dart = known.minByOrNull { dist(it.board, board) }?.takeIf { dist(it.board, board) <= config.sameDartMm * 2 } ?: return false
+        known.remove(dart)
+        candidates.clear()
+        return true
+    }
+
     fun process(frame: ColorFrame): List<TrackerEvent> {
         val found = detect(frame, corners)
         val cal = completeCorners(found.corners, boardToPixel) ?: return lostBoard()

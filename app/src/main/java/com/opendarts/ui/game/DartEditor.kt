@@ -35,9 +35,20 @@ import com.opendarts.ui.theme.Palette
 /**
  * What to do with one dart slot: for a dart that is there, mark it a miss, remove it or pick another score;
  * for the next empty slot, enter a dart by hand. [onPick] gets the new score, or null to remove the dart.
+ * A dart the camera could not see because it sits behind another one is added with [onBehind] (index of the front dart);
+ * when the front dart is removed, [onLookBehind] asks the camera to score whatever dart is still visible there.
  */
 @Composable
-fun DartEditor(slot: Int, current: DartHit?, onPick: (DartHit?) -> Unit, onDismiss: () -> Unit) {
+fun DartEditor(
+    slot: Int,
+    current: DartHit?,
+    front: List<DartHit>,
+    canLookBehind: Boolean,
+    onPick: (DartHit?) -> Unit,
+    onBehind: (Int) -> Unit,
+    onLookBehind: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     var choosing by remember { mutableStateOf(current == null) }
     var multiplier by remember { mutableStateOf(current?.multiplier?.takeIf { current.base in 1..20 } ?: Multiplier.SINGLE) }
     val done: (DartHit?) -> Unit = { onPick(it); onDismiss() }
@@ -52,9 +63,21 @@ fun DartEditor(slot: Int, current: DartHit?, onPick: (DartHit?) -> Unit, onDismi
                     Button(onClick = { choosing = true }, modifier = Modifier.fillMaxWidth()) { Text("Change score") }
                     OutlinedButton(onClick = { done(DartHit.MISS) }, modifier = Modifier.fillMaxWidth()) { Text("Make it a miss") }
                     OutlinedButton(onClick = { done(null) }, modifier = Modifier.fillMaxWidth()) { Text("Remove this dart") }
+                    if (canLookBehind) OutlinedButton(onClick = { onLookBehind(); onDismiss() }, modifier = Modifier.fillMaxWidth()) { Text("Remove \u2013 a dart is behind it") }
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (current == null && front.isNotEmpty()) {
+                        Text("Hidden behind a dart?", color = Palette.Ink.copy(alpha = 0.7f), fontFamily = Condensed, fontSize = 16.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            front.forEachIndexed { i, hit ->
+                                Box(
+                                    Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(10.dp)).background(Palette.KeyDark).clickable { onBehind(i); onDismiss() },
+                                    contentAlignment = Alignment.Center,
+                                ) { Text("Dart ${i + 1}: $hit", color = Palette.Ink, fontFamily = Condensed, fontSize = 17.sp, maxLines = 1) }
+                            }
+                        }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Multiplier.values().forEach { m ->
                             val selected = m == multiplier

@@ -84,7 +84,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
             store,
             onEvent = { event ->
                 when (event) {
-                    is TrackerEvent.DartLanded -> { markers.add(event.pixel); session.throwDart(event.hit, fromCamera = true) }
+                    is TrackerEvent.DartLanded -> { markers.add(event.pixel); session.throwDart(event.hit, fromCamera = true, spot = event.board) }
                     is TrackerEvent.DartsRemoved -> {
                         while (markers.size > event.remaining && markers.isNotEmpty()) markers.removeAt(markers.lastIndex)
                         if (event.remaining == 0) session.dartsPulled()
@@ -143,7 +143,13 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
         }
     }
     if (tips) SetupTipsDialog { tips = false }
-    editing?.let { slot -> DartEditor(slot, game.turnHits.getOrNull(slot), onPick = { session.editDart(slot, it) }, onDismiss = { editing = null }) }
+    editing?.let { slot ->
+        DartEditor(
+            slot, game.turnHits.getOrNull(slot), front = game.turnHits.take(slot), canLookBehind = session.canLookBehind(slot),
+            onPick = { session.editDart(slot, it) }, onBehind = { session.dartBehind(slot, it) },
+            onLookBehind = { session.editDart(slot, null, lookBehind = true)?.let(camera::releaseSpot) }, onDismiss = { editing = null },
+        )
+    }
     saved?.let { msg ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { saved = null }, confirmButton = { androidx.compose.material3.TextButton(onClick = { saved = null }) { Text("OK") } }, text = { Text(msg) },

@@ -1,9 +1,10 @@
-﻿package com.opendarts.ui
+package com.opendarts.ui
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.core.view.drawToBitmap
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.opendarts.session.GameKind
 import com.opendarts.session.GameSession
@@ -66,4 +67,17 @@ class GameScreenTest {
 
     @Test @Config(qualifiers = "w700dp-h360dp-land-xxhdpi")
     fun cameraScreenFollowsTheGameLandscape() = camera("camera-landscape")
+
+    @Test @Config(qualifiers = "w700dp-h360dp-land-xxhdpi")
+    fun editorOffersTheHiddenDartOptions() {
+        val session = GameSession().also { it.start(GameSetup(input = InputMode.CAMERA)) }
+        rule.setContent { OpenDartsTheme { GameScreen(session, onExit = {}, onCalibrate = {}) } }
+        rule.runOnIdle { session.throwDart(com.opendarts.game.model.DartHit(20, com.opendarts.game.model.Multiplier.TRIPLE), fromCamera = true, spot = com.opendarts.geometry.Point(0.0, 100.0)) }
+        rule.waitForIdle()
+        rule.onNodeWithText("T20").performClick()
+        rule.onNodeWithText("Remove \u2013 a dart is behind it").assertExists().performClick()
+        rule.waitForIdle()
+        check(session.game!!.turnHits.isEmpty()) { "dart was not removed" }
+
+    }
 }

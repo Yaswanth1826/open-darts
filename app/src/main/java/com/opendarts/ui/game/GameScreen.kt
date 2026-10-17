@@ -1,4 +1,4 @@
-﻿@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.opendarts.ui.game
 
@@ -128,7 +128,12 @@ private fun ManualGame(session: GameSession, game: DartGame<*>, onExit: () -> Un
             keypad(Modifier.weight(1f))
         }
     }
-    editing?.let { slot -> DartEditor(slot, game.turnHits.getOrNull(slot), onPick = { session.editDart(slot, it) }, onDismiss = { editing = null }) }
+    editing?.let { slot ->
+        DartEditor(
+            slot, game.turnHits.getOrNull(slot), front = game.turnHits.take(slot), canLookBehind = false,
+            onPick = { session.editDart(slot, it) }, onBehind = { session.dartBehind(slot, it) }, onLookBehind = {}, onDismiss = { editing = null },
+        )
+    }
 }
 
 /**
