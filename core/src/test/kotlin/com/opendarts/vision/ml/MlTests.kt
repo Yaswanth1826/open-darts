@@ -313,9 +313,33 @@ class MlDartTrackerTest {
     @Test
     fun aDartHeldInAMovingHandIsNotScored() {
         repeat(2) { tracker.process(handAt(null)) }
-        visible = listOf(pixelOf(DartHit(20, Multiplier.TRIPLE)))
-        for (step in 0 until 8) assertTrue(landed(tracker.process(handAt(step % 4))).isEmpty())
+        for (step in 0 until 8) {
+            visible = listOf(boardToPixel.apply(20.0 + step * 30, 30.0 + step * 20))
+            assertTrue(landed(tracker.process(handAt(step % 4))).isEmpty())
+        }
         assertEquals(0, tracker.darts)
+    }
+
+    @Test
+    fun aDartThatStaysPutWhileAHandMovesIsScoredAfterThreeLooks() {
+        repeat(2) { tracker.process(handAt(null)) }
+        visible = listOf(pixelOf(DartHit(20, Multiplier.TRIPLE)))
+        assertTrue(landed(tracker.process(handAt(0))).isEmpty())
+        assertTrue(landed(tracker.process(handAt(1))).isEmpty())
+        assertEquals(DartHit(20, Multiplier.TRIPLE), landed(tracker.process(handAt(2))).single().hit)
+    }
+
+    @Test
+    fun dartsConfirmedInTheSameLookAreScoredInTheOrderTheyWereFirstSeen() {
+        val first = pixelOf(DartHit(20, Multiplier.TRIPLE))
+        val second = pixelOf(DartHit(3, Multiplier.SINGLE))
+        repeat(2) { tracker.process(handAt(null)) }
+        visible = listOf(first)
+        tracker.process(handAt(0))
+        visible = listOf(second, first)
+        assertTrue(landed(tracker.process(handAt(2))).isEmpty())
+        val events = landed(tracker.process(handAt(2)))
+        assertEquals(listOf(DartHit(20, Multiplier.TRIPLE), DartHit(3, Multiplier.SINGLE)), events.map { it.hit })
     }
 
     @Test
@@ -384,8 +408,7 @@ class MlDartTrackerTest {
         repeat(2) { look() }
         assertEquals(2, tracker.darts)
         visible = emptyList()
-        assertTrue(look().isEmpty())
-        assertTrue(look().isEmpty())
+        repeat(MlTrackerConfig().removeAfterMisses - 1) { assertTrue(look().isEmpty()) }
         val events = look()
         assertEquals(TrackerEvent.DartsRemoved(0), events.single())
         assertEquals(0, tracker.darts)

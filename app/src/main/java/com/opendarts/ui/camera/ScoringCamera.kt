@@ -213,7 +213,7 @@ class ScoringCamera(
         resetRequested.set(false)
         startRequested.set(false)
         while (true) tracker.releaseAt(releases.poll() ?: break)
-        val events = tracker.process(colour)
+        val events = tracker.process(colour, now)
         val lookMs = System.currentTimeMillis() - now
         val ready = tracker.state == com.opendarts.vision.TrackerState.READY
         missedLooks = if (ready) 0 else missedLooks + 1
@@ -302,8 +302,8 @@ class ScoringCamera(
         /** Two detections must agree to within this share of the frame's shorter side. */
         const val AGREEMENT = 0.012
         const val NOT_FOUND_AFTER = 6
-        const val LOOK_INTERVAL_MS = 450L
+        const val LOOK_INTERVAL_MS = 200L
         const val SAMPLE_MS = 6000L
-        const val NOT_FOUND_LOOKS = 8
+        const val NOT_FOUND_LOOKS = 14
     }
 }

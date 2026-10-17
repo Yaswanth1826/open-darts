@@ -10,8 +10,10 @@ import kotlin.math.hypot
 data class MlTrackerConfig(
     /** A new dart must be seen in this many consecutive looks before it counts. */
     val confirmLooks: Int = 2,
+    /** While a hand is moving in front of the board a new dart has to be seen this many looks in a row, because a hand can fool the network. */
+    val confirmLooksWithHand: Int = 3,
     /** A known dart that is not seen for this many consecutive looks has been pulled out. */
-    val removeAfterMisses: Int = 3,
+    val removeAfterMisses: Int = 4,
     /** Detections closer than this (mm on the board) are the same dart. */
     val sameDartMm: Double = 12.0,
     /** Detections further than this from the bull are not darts in the board (the bezel, the logo, a hand), so they never count as a miss. */
@@ -20,17 +22,17 @@ data class MlTrackerConfig(
     /** Corner positions are blended with the previous ones unless they jump by more than this share of the frame diagonal. */
     val smoothing: Double = 0.4,
     val jumpFraction: Double = 0.04,
-    val jumpLooksToReset: Int = 3,
+    val jumpLooksToReset: Int = 4,
     /** When the board cannot be found (a hand in front of it, a blurred frame) the last fit is kept for this many looks. */
-    val holdLooks: Int = 10,
+    val holdLooks: Int = 16,
     /** After the camera moved, darts cannot be taken as pulled out for this many looks (they are matched again at their board positions first). */
-    val graceLooks: Int = 5,
+    val graceLooks: Int = 8,
     /** While the picture is catching up with a small camera shift, darts are placed with the exact corners of the look when they differ by more than this share of the frame diagonal. */
     val trustRawFraction: Double = 0.008,
     /** A look where more than this share of the picture changed since the last one has a hand or arm in it (a landing dart changes far less). */
     val handChangeShare: Double = 0.05,
     /** Darts are only taken as pulled out after the scene has been still for this many looks, so a hand reaching in cannot pass the turn. */
-    val calmLooksToRemove: Int = 2,
+    val calmLooksToRemove: Int = 3,
 )
 
 /**
@@ -43,7 +45,8 @@ class MlDartTracker(
     private val config: MlTrackerConfig = MlTrackerConfig(),
 ) {
     private class Known(val board: Point, val pixel: Point, var misses: Int = 0)
-    private class Candidate(var board: Point, var pixel: Point, var seen: Int = 1)
+    /** [born] is the look where the dart was first seen, so darts confirmed together are scored in the order they landed. */
+    private class Candidate(var board: Point, var pixel: Point, val born: Long, var seen: Int = 1)
 
     private val known = ArrayList<Known>()
     private var candidates = ArrayList<Candidate>()
@@ -54,6 +57,7 @@ class MlDartTracker(
     private var graceLooks = 0
     private val scene = SceneMotion(config.handChangeShare)
     private var calmLooks = 0
+    private var looks = 0L
 
     var state = TrackerState.WAITING_FOR_BOARD
         private set
@@ -90,8 +94,10 @@ class MlDartTracker(
         return true
     }
 
-    fun process(frame: ColorFrame): List<TrackerEvent> {
-        handInWay = scene.moved(frame)
+    /** One look at the board. [nowMillis] is the time of the look, used to tell a moving hand from a settled scene. */
+    fun process(frame: ColorFrame, nowMillis: Long = looks * 450): List<TrackerEvent> {
+        looks++
+        handInWay = scene.moved(frame, nowMillis)
         calmLooks = if (handInWay) 0 else calmLooks + 1
         val found = detect(frame, corners)
         val cal = completeCorners(found.corners, boardToPixel) ?: return lostBoard()
@@ -129,27 +135,29 @@ class MlDartTracker(
             known.removeAll { (it.misses >= config.removeAfterMisses).also { gone -> if (gone) removed++ } }
         }
 
+        val needed = if (handInWay) config.confirmLooksWithHand else config.confirmLooks
         val next = ArrayList<Candidate>()
-        if (handInWay) {
-            next += candidates
-        } else for ((board, pixel) in unmatched) {
+        val confirmed = ArrayList<Candidate>()
+        for ((board, pixel) in unmatched) {
             val candidate = candidates.firstOrNull { dist(it.board, board) <= config.sameDartMm }
             if (candidate != null) {
                 candidates.remove(candidate)
                 candidate.board = board
                 candidate.pixel = pixel
                 candidate.seen++
-                if (candidate.seen >= config.confirmLooks && known.size < config.maxDartsOnBoard) {
-                    known += Known(board, pixel)
-                    events += TrackerEvent.DartLanded(BoardGeometry.hitAt(board), board, pixel)
-                } else if (candidate.seen < config.confirmLooks) {
-                    next += candidate
-                }
+                if (candidate.seen >= needed) confirmed += candidate else next += candidate
             } else {
-                next += Candidate(board, pixel)
+                next += Candidate(board, pixel, looks)
             }
         }
+        // A hand can hide a dart for a look; do not forget it was seen.
+        if (handInWay) next += candidates
         candidates = next
+        for (candidate in confirmed.sortedBy { it.born }) {
+            if (known.size >= config.maxDartsOnBoard) break
+            known += Known(candidate.board, candidate.pixel)
+            events += TrackerEvent.DartLanded(BoardGeometry.hitAt(candidate.board), candidate.board, candidate.pixel)
+        }
 
         if (removed > 0) events += TrackerEvent.DartsRemoved(known.size)
         return events
