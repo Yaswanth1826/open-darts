@@ -23,6 +23,10 @@ data class MlTrackerConfig(
     val jumpLooksToReset: Int = 3,
     /** When the board cannot be found (a hand in front of it, a blurred frame) the last fit is kept for this many looks. */
     val holdLooks: Int = 10,
+    /** After the camera moved, darts cannot be taken as pulled out for this many looks (they are matched again at their board positions first). */
+    val graceLooks: Int = 5,
+    /** While the picture is catching up with a small camera shift, darts are placed with the exact corners of the look when they differ by more than this share of the frame diagonal. */
+    val trustRawFraction: Double = 0.008,
     /** A look where more than this share of the picture changed since the last one has a hand or arm in it (a landing dart changes far less). */
     val handChangeShare: Double = 0.05,
     /** Darts are only taken as pulled out after the scene has been still for this many looks, so a hand reaching in cannot pass the turn. */
@@ -46,6 +50,8 @@ class MlDartTracker(
     private var corners: List<Point>? = null
     private var jumps = 0
     private var lost = 0
+    private var settling = false
+    private var graceLooks = 0
     private val scene = SceneMotion(config.handChangeShare)
     private var calmLooks = 0
 
@@ -89,8 +95,13 @@ class MlDartTracker(
         calmLooks = if (handInWay) 0 else calmLooks + 1
         val found = detect(frame, corners)
         val cal = completeCorners(found.corners, boardToPixel) ?: return lostBoard()
-        val fit = fit(cal, frame) ?: return lostBoard()
+        val smoothed = fit(cal, frame) ?: return lostBoard()
         lost = 0
+        if (settling) return emptyList()
+        if (graceLooks > 0) graceLooks--
+        val diagonal = hypot(frame.width.toDouble(), frame.height.toDouble())
+        val off = cal.indices.maxOf { dist(cal[it], corners!![it]) } / diagonal
+        val fit = if (off > config.trustRawFraction) runCatching { Homography.fromFourPoints(BoardGeometry.MODEL_CALIBRATION_POINTS, cal) }.getOrNull() ?: smoothed else smoothed
         state = TrackerState.READY
         val toBoard = fit.inverse()
         boardToPixel = fit
@@ -114,7 +125,7 @@ class MlDartTracker(
                 if (!handInWay) dart.misses++
             }
         }
-        if (calmLooks >= config.calmLooksToRemove) {
+        if (calmLooks >= config.calmLooksToRemove && graceLooks == 0) {
             known.removeAll { (it.misses >= config.removeAfterMisses).also { gone -> if (gone) removed++ } }
         }
 
@@ -159,13 +170,19 @@ class MlDartTracker(
         } else {
             val jump = cal.indices.maxOf { dist(cal[it], previous[it]) } / diagonal
             if (jump > config.jumpFraction) {
+                settling = true
                 if (++jumps >= config.jumpLooksToReset) {
                     jumps = 0
-                    markBoardEmpty()
+                    settling = false
+                    // The darts are kept: they are stored at board positions, which a moved camera does not change.
+                    candidates.clear()
+                    known.forEach { it.misses = 0 }
+                    graceLooks = config.graceLooks
                     cal
                 } else previous
             } else {
                 jumps = 0
+                settling = false
                 cal.indices.map {
                     Point(previous[it].x + (cal[it].x - previous[it].x) * config.smoothing, previous[it].y + (cal[it].y - previous[it].y) * config.smoothing)
                 }

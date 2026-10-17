@@ -209,10 +209,14 @@ class PlacementTest {
 }
 class MlDartTrackerTest {
     private val frame = ColorFrame(640, 480, ByteArray(640 * 480 * 3))
-    private val boardToPixel = Homography.fromFourPoints(
-        BoardGeometry.MODEL_CALIBRATION_POINTS,
-        listOf(Point(268.0, 66.0), Point(384.0, 421.0), Point(112.0, 296.0), Point(525.0, 190.0)),
-    )
+    private val corners = listOf(Point(268.0, 66.0), Point(384.0, 421.0), Point(112.0, 296.0), Point(525.0, 190.0))
+    private var boardToPixel = Homography.fromFourPoints(BoardGeometry.MODEL_CALIBRATION_POINTS, corners)
+
+    /** The phone is nudged: everything in the picture, the board and the darts, moves by the same amount. */
+    private fun moveCamera(dx: Double, dy: Double, keep: List<DartHit>) {
+        boardToPixel = Homography.fromFourPoints(BoardGeometry.MODEL_CALIBRATION_POINTS, corners.map { Point(it.x + dx, it.y + dy) })
+        visible = keep.map(::pixelOf)
+    }
 
     private fun pixelOf(hit: DartHit) = boardToPixel.apply(BoardGeometry.centreOf(hit))
 
@@ -239,6 +243,30 @@ class MlDartTrackerTest {
             rgb[i] = -1; rgb[i + 1] = -1; rgb[i + 2] = -1
         }
         return ColorFrame(640, 480, rgb)
+    }
+
+    @Test
+    fun aSmallCameraNudgeDoesNotScoreTheDartsAgain() {
+        val hit = DartHit(20, Multiplier.TRIPLE)
+        visible = listOf(pixelOf(hit))
+        repeat(3) { look() }
+        moveCamera(14.0, -9.0, listOf(hit))
+        repeat(8) { assertTrue(landed(look()).isEmpty()) }
+        assertEquals(1, tracker.darts)
+    }
+
+    @Test
+    fun aBiggerCameraMoveKeepsTheDartsAndScoresNothingNew() {
+        val hit = DartHit(5, Multiplier.SINGLE)
+        visible = listOf(pixelOf(hit))
+        repeat(3) { look() }
+        moveCamera(45.0, 30.0, listOf(hit))
+        repeat(15) {
+            val events = look()
+            assertTrue(landed(events).isEmpty())
+            assertTrue(events.none { it is TrackerEvent.DartsRemoved })
+        }
+        assertEquals(1, tracker.darts)
     }
 
     @Test
