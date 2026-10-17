@@ -16,7 +16,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -35,6 +39,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,9 +77,44 @@ inline fun ObserveGame() {
     LocalGameRevision.current
 }
 
+/** Keeps clear of the system bars and the camera notch, whichever of them are showing. */
+@Composable
+fun Modifier.gameInsets(): Modifier = windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))
+
+/**
+ * Keeps the screen awake for the whole game, and in landscape hides the status and navigation bars (a swipe from the edge
+ * brings them back for a moment) so the camera and scores get every pixel.
+ */
+@Composable
+private fun GameWindow() {
+    val view = LocalView.current
+    val landscape = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    DisposableEffect(view) {
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
+    }
+    DisposableEffect(view, landscape) {
+        var context = view.context
+        while (context is android.content.ContextWrapper && context !is android.app.Activity) context = context.baseContext
+        val window = (context as? android.app.Activity)?.window
+        if (window == null || !landscape) return@DisposableEffect onDispose {}
+        val controller = androidx.core.view.WindowCompat.getInsetsController(window, view)
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (android.os.Build.VERSION.SDK_INT >= 28) window.attributes = window.attributes.apply { layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES }
+        controller.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        onDispose {
+            controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, true)
+            if (android.os.Build.VERSION.SDK_INT >= 28) window.attributes = window.attributes.apply { layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT }
+        }
+    }
+}
+
 @Composable
 fun GameScreen(session: GameSession, onExit: () -> Unit, onCalibrate: () -> Unit) {
     val game = session.game ?: return
+    GameWindow()
     CompositionLocalProvider(LocalGameRevision provides session.revision) {
         if (session.setup.input == InputMode.CAMERA) CameraGame(session, game, onExit, onCalibrate) else ManualGame(session, game, onExit)
 
@@ -102,7 +143,7 @@ private fun ManualGame(session: GameSession, game: DartGame<*>, onExit: () -> Un
             modifier = modifier,
         )
     }
-    Column(Modifier.fillMaxSize().background(Palette.KeyLight).systemBarsPadding()) {
+    Column(Modifier.fillMaxSize().background(Palette.KeyLight).gameInsets()) {
         GameTopBar(session, game, onExit, onPrevious = null, onNextPlayer = null)
         if (landscape) {
             Row(Modifier.weight(1f).fillMaxWidth()) {
@@ -123,6 +164,9 @@ private fun ManualGame(session: GameSession, game: DartGame<*>, onExit: () -> Un
                     session.message, color = Palette.Ink.copy(alpha = 0.7f), fontFamily = CondensedRegular, fontSize = 14.sp, maxLines = 1,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
+                checkoutHint(game)?.let {
+                    Text("FINISH  $it", color = Palette.Teal, fontFamily = Condensed, fontSize = 17.sp, maxLines = 1, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                }
             }
             PlayerTabs(game, roomy = true)
             keypad(Modifier.weight(1f))
@@ -156,8 +200,8 @@ fun GameTopBar(
     val configuration = LocalConfiguration.current
     val wide = configuration.screenWidthDp >= 600
     val short = configuration.screenHeightDp < 480
-    val side = if (short) 40.dp else 46.dp
-    Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 12.dp, vertical = if (short) 4.dp else 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    val side = if (short) 34.dp else 40.dp
+    Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 10.dp, vertical = if (short) 2.dp else 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Box {
             SquareButton(onClick = { menu = true }, size = side) { Icon(Icons.Default.MoreVert, "Menu", tint = Palette.Ink) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -176,8 +220,8 @@ fun GameTopBar(
             if (maxWidth >= 96.dp) {
                 Text(
                     buildAnnotatedString {
-                        withStyle(SpanStyle(color = Palette.Ink, fontSize = if (onNextPlayer != null) (if (wide) 24.sp else 18.sp) else 30.sp)) { append(session.setup.title.uppercase()) }
-                        if (onNextPlayer == null) withStyle(SpanStyle(color = Palette.Ink.copy(alpha = 0.5f), fontSize = 18.sp)) { append("  R${game.round}$leg") }
+                        withStyle(SpanStyle(color = Palette.Ink, fontSize = if (onNextPlayer != null) (if (wide) 22.sp else 18.sp) else if (short) 24.sp else 28.sp)) { append(session.setup.title.uppercase()) }
+                        if (onNextPlayer == null) withStyle(SpanStyle(color = Palette.Ink.copy(alpha = 0.5f), fontSize = 16.sp)) { append("  R${game.round}$leg") }
                     },
                     fontFamily = Condensed, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
                 )
@@ -205,10 +249,10 @@ fun GameTopBar(
 @Composable
 private fun PlayerButton(label: String, onClick: () -> Unit, enabled: Boolean = true, height: androidx.compose.ui.unit.Dp = 46.dp, compact: Boolean = false) {
     Box(
-        Modifier.height(height).clip(RoundedCornerShape(12.dp)).background(Palette.Sand).clickable(enabled = enabled, onClick = onClick).padding(horizontal = if (compact) 9.dp else 14.dp),
+        Modifier.height(height).clip(RoundedCornerShape(12.dp)).background(Palette.Sand).clickable(enabled = enabled, onClick = onClick).padding(horizontal = if (compact) 8.dp else 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = Palette.Ink.copy(alpha = if (enabled) 1f else 0.4f), fontFamily = Condensed, fontSize = if (compact) 16.sp else 19.sp, maxLines = 1, softWrap = false)
+        Text(label, color = Palette.Ink.copy(alpha = if (enabled) 1f else 0.4f), fontFamily = Condensed, fontSize = if (compact) 15.sp else 17.sp, maxLines = 1, softWrap = false)
     }
 }
 

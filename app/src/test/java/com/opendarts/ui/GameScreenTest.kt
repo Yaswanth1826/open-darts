@@ -80,4 +80,42 @@ class GameScreenTest {
         check(session.game!!.turnHits.isEmpty()) { "dart was not removed" }
 
     }
+
+    private fun fourPlayers(input: InputMode, shotName: String) {
+        val names = listOf("Player 1", "Player 2", "Player 3", "Player 4")
+        val session = GameSession().also { it.start(GameSetup(playerNames = names, input = input)) }
+        rule.setContent { OpenDartsTheme { GameScreen(session, onExit = {}, onCalibrate = {}) } }
+        rule.waitForIdle()
+        shot(shotName)
+        for (name in names) check(rule.onAllNodesWithText(name.uppercase()).fetchSemanticsNodes().isNotEmpty()) { "$name is not shown" }
+    }
+
+    @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
+    fun showsEveryPlayerInPortraitKeypadMode() = fourPlayers(InputMode.MANUAL, "four-manual-portrait")
+
+    @Test @Config(qualifiers = "w700dp-h360dp-land-xxhdpi")
+    fun showsEveryPlayerInLandscapeKeypadMode() = fourPlayers(InputMode.MANUAL, "four-manual-landscape")
+
+    @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
+    fun showsEveryPlayerInPortraitCameraMode() = fourPlayers(InputMode.CAMERA, "four-camera-portrait")
+
+    @Test @Config(qualifiers = "w700dp-h360dp-land-xxhdpi")
+    fun showsEveryPlayerInLandscapeCameraMode() = fourPlayers(InputMode.CAMERA, "four-camera-landscape")
+
+    @Test @Config(qualifiers = "w700dp-h360dp-land-xxhdpi")
+    fun scorePadFitsInLandscapeWithoutScrolling() {
+        val session = GameSession().also { it.start(GameSetup(input = InputMode.MANUAL)) }
+        rule.setContent { OpenDartsTheme { GameScreen(session, onExit = {}, onCalibrate = {}) } }
+        rule.runOnIdle { session.throwDart(com.opendarts.game.model.DartHit(20, com.opendarts.game.model.Multiplier.SINGLE)) }
+        rule.waitForIdle()
+        rule.onNodeWithText("S20").performClick()
+        rule.onNodeWithText("Change score").performClick()
+        rule.waitForIdle()
+        for (label in listOf("1", "10", "11", "20", "Bull", "Miss", "Triple")) {
+            rule.onAllNodesWithText(label).fetchSemanticsNodes().let { check(it.isNotEmpty()) { "$label missing" } }
+        }
+        val bottom = rule.onAllNodesWithText("11").fetchSemanticsNodes().maxOf { it.boundsInRoot.bottom }
+        check(bottom < 360f * 3f) { "pad runs off the screen: $bottom" }
+    }
 }
+

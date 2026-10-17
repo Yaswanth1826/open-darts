@@ -1,8 +1,6 @@
 package com.opendarts.ui.game
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,7 +12,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Text
@@ -28,6 +25,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opendarts.game.engine.DartGame
+import com.opendarts.game.x01.Checkout
 import com.opendarts.game.x01.X01Game
 import com.opendarts.ui.common.DartIcon
 import com.opendarts.ui.theme.Condensed
@@ -46,6 +44,13 @@ fun standing(game: DartGame<*>, index: Int): Standing {
     }
     val (big, caption) = headline(game, index)
     return Standing(big, caption, null, null, if (active) game.turnHits.sumOf { it.points } else 0)
+}
+
+/** The shortest finish for the player on the throw, such as "T20 T20 D20", or null when there is none (or this is not X01). */
+fun checkoutHint(game: DartGame<*>): String? {
+    if (game !is X01Game || game.isFinished || game.turnOver) return null
+    val remaining = game.gameState.players[game.currentPlayerIndex].remaining
+    return Checkout.suggest(remaining, game.config.outMode, game.dartsLeftInTurn.coerceAtLeast(1))?.let(Checkout::format)
 }
 
 /**
@@ -93,7 +98,7 @@ fun CurrentCard(game: DartGame<*>, modifier: Modifier = Modifier, fill: Boolean 
     val s = standing(game, i)
     BoxWithConstraints(modifier.fillMaxWidth().background(Color.White)) {
         val byWidth = maxWidth.value * 0.21f
-        val byHeight = if (fill && maxHeight != Dp.Infinity) (maxHeight.value - 110f) * 0.8f else Float.MAX_VALUE
+        val byHeight = if (fill && maxHeight != Dp.Infinity) (maxHeight.value - 130f) * 0.8f else Float.MAX_VALUE
         val bigSize = minOf(byWidth, byHeight, 130f).coerceAtLeast(40f)
         Column(Modifier.fillMaxWidth().then(if (fill) Modifier.fillMaxHeight() else Modifier).padding(horizontal = 14.dp, vertical = 8.dp)) {
             DartSlots(game, Palette.Orange, onSlot = onSlot)
@@ -106,6 +111,7 @@ fun CurrentCard(game: DartGame<*>, modifier: Modifier = Modifier, fill: Boolean 
                 Column(Modifier.weight(2.2f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(s.big, color = Palette.Charcoal, fontFamily = Condensed, fontSize = bigSize.sp, lineHeight = (bigSize * 1.03f).sp, maxLines = 1)
                     Text(game.players[i].name.uppercase(), color = Palette.Ink, fontFamily = Condensed, fontSize = 22.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    checkoutHint(game)?.let { Text(it, color = Palette.Teal, fontFamily = Condensed, fontSize = 18.sp, maxLines = 1) }
                 }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                     Text(if (s.ppr != null) "PPR" else s.caption.uppercase(), color = Color.Gray, fontFamily = CondensedRegular, fontSize = 16.sp)
@@ -117,39 +123,47 @@ fun CurrentCard(game: DartGame<*>, modifier: Modifier = Modifier, fill: Boolean 
 }
 
 /**
- * One tab per player. [roomy] (keypad mode) is the big banner version with the turn box and PPR line;
- * otherwise a slim tab sits under the camera card.
+ * One tab per player, every player visible: up to four share a row, more wrap onto further rows. [roomy] (keypad mode, portrait)
+ * is the big banner version with the turn box and PPR line, two to a row; otherwise slim tabs sit under the camera card.
  */
 @Composable
 fun PlayerTabs(game: DartGame<*>, roomy: Boolean, modifier: Modifier = Modifier) {
     ObserveGame()
-    val few = game.players.size <= 2
-    val scroll = rememberScrollState()
-    Row(modifier.fillMaxWidth().then(if (few) Modifier else Modifier.horizontalScroll(scroll))) {
-        game.players.forEachIndexed { i, player ->
-            val active = i == game.currentPlayerIndex && !game.isFinished
-            val s = standing(game, i)
-            val tabModifier = if (few) Modifier.weight(1f) else Modifier.width(170.dp)
-            Column(tabModifier.background(if (active) Palette.Red else Palette.Charcoal)) {
-                if (roomy) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            if (s.struck != null) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) { Struck(s.struck, dark = false, size = 17); TurnBox(s.turn, dark = false, size = 17) }
-                            } else if (s.caption.isNotEmpty()) Text(s.caption, color = Color.White.copy(alpha = 0.6f), fontFamily = Condensed, fontSize = 18.sp)
-                            Text(player.name.uppercase(), color = Color.White.copy(alpha = if (active) 1f else 0.55f), fontFamily = Condensed, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val perRow = if (roomy) 2 else minOf(4, game.players.size)
+    // Slim tabs shrink their type as more of them share the width.
+    val crowded = !roomy && perRow >= 3
+    Column(modifier.fillMaxWidth()) {
+        game.players.indices.chunked(perRow).forEach { row ->
+            Row(Modifier.fillMaxWidth()) {
+                row.forEach { i ->
+                    val player = game.players[i]
+                    val active = i == game.currentPlayerIndex && !game.isFinished
+                    val s = standing(game, i)
+                    Column(Modifier.weight(1f).background(if (active) Palette.Red else Palette.Charcoal)) {
+                        if (roomy) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    if (s.struck != null) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) { Struck(s.struck, dark = false, size = 17); TurnBox(s.turn, dark = false, size = 17) }
+                                    } else if (s.caption.isNotEmpty()) Text(s.caption, color = Color.White.copy(alpha = 0.6f), fontFamily = Condensed, fontSize = 18.sp)
+                                    Text(player.name.uppercase(), color = Color.White.copy(alpha = if (active) 1f else 0.55f), fontFamily = Condensed, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                Text(s.big, color = Color.White, fontFamily = Condensed, fontSize = 46.sp, lineHeight = 48.sp, maxLines = 1)
+                            }
+                            Box(Modifier.fillMaxWidth().background(Color(0xFF1E1E1E)).padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
+                                Text(if (s.ppr != null) "PPR: ${s.ppr}" else s.caption.uppercase(), color = Color.White, fontFamily = Condensed, fontSize = 17.sp)
+                            }
+                        } else {
+                            Column(Modifier.fillMaxWidth().padding(vertical = 5.dp, horizontal = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(s.big, color = Color.White, fontFamily = Condensed, fontSize = if (crowded) 30.sp else 38.sp, lineHeight = if (crowded) 32.sp else 40.sp, maxLines = 1)
+                                Text(
+                                    player.name.uppercase(), color = Color.White.copy(alpha = if (active) 1f else 0.6f), fontFamily = Condensed,
+                                    fontSize = if (crowded) 13.sp else 18.sp, lineHeight = if (crowded) 14.sp else 19.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Box(Modifier.fillMaxWidth().height(if (active) 8.dp else 4.dp).background(Color.Black.copy(alpha = 0.35f)))
                         }
-                        Text(s.big, color = Color.White, fontFamily = Condensed, fontSize = 54.sp, lineHeight = 56.sp, maxLines = 1)
                     }
-                    Box(Modifier.fillMaxWidth().background(Color(0xFF1E1E1E)).padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
-                        Text(if (s.ppr != null) "PPR: ${s.ppr}" else s.caption.uppercase(), color = Color.White, fontFamily = Condensed, fontSize = 17.sp)
-                    }
-                } else {
-                    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(s.big, color = Color.White, fontFamily = Condensed, fontSize = 38.sp, lineHeight = 40.sp, maxLines = 1)
-                        Text(player.name.uppercase(), color = Color.White.copy(alpha = if (active) 1f else 0.6f), fontFamily = Condensed, fontSize = 18.sp, lineHeight = 19.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    Box(Modifier.fillMaxWidth().height(8.dp).background(Color.Black.copy(alpha = 0.35f)))
                 }
             }
         }

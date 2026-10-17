@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -68,6 +67,7 @@ import com.opendarts.vision.TrackerState
 fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCalibrate: () -> Unit) {
     ObserveGame()
     val context = LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val store = remember { CalibrationStore(context) }
     var status by remember { mutableStateOf(CameraStatus()) }
     val markers = remember { mutableStateListOf<Point>() }
@@ -84,7 +84,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
             store,
             onEvent = { event ->
                 when (event) {
-                    is TrackerEvent.DartLanded -> { markers.add(event.pixel); session.throwDart(event.hit, fromCamera = true, spot = event.board) }
+                    is TrackerEvent.DartLanded -> { markers.add(event.pixel); haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); session.throwDart(event.hit, fromCamera = true, spot = event.board) }
                     is TrackerEvent.DartsRemoved -> {
                         while (markers.size > event.remaining && markers.isNotEmpty()) markers.removeAt(markers.lastIndex)
                         if (event.remaining == 0) session.dartsPulled()
@@ -118,7 +118,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
         }
     }
 
-    Column(Modifier.fillMaxSize().background(Palette.Slate).systemBarsPadding()) {
+    Column(Modifier.fillMaxSize().background(Palette.Slate).gameInsets()) {
         GameTopBar(session, game, onExit, onPrevious = { session.previousPlayer() }, onNextPlayer = { session.nextPlayer() }) { dismiss ->
             DropdownMenuItem(text = { Text("Rescan board") }, onClick = { dismiss(); camera.findBoardAgain() })
             DropdownMenuItem(text = { Text("Board is clear \u2013 start now") }, enabled = status.phase == CameraPhase.TRACKING, onClick = { dismiss(); camera.startNow() })
