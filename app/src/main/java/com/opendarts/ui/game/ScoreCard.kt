@@ -97,9 +97,9 @@ fun CurrentCard(game: DartGame<*>, modifier: Modifier = Modifier, fill: Boolean 
     val i = game.currentPlayerIndex
     val s = standing(game, i)
     BoxWithConstraints(modifier.fillMaxWidth().background(Color.White)) {
-        val byWidth = maxWidth.value * 0.21f
-        val byHeight = if (fill && maxHeight != Dp.Infinity) (maxHeight.value - 130f) * 0.8f else Float.MAX_VALUE
-        val bigSize = minOf(byWidth, byHeight, 130f).coerceAtLeast(40f)
+        val byWidth = maxWidth.value * 0.15f
+        val byHeight = if (fill && maxHeight != Dp.Infinity) (maxHeight.value - 130f) * 0.55f else Float.MAX_VALUE
+        val bigSize = minOf(byWidth, byHeight, 84f).coerceAtLeast(40f)
         Column(Modifier.fillMaxWidth().then(if (fill) Modifier.fillMaxHeight() else Modifier).padding(horizontal = 14.dp, vertical = 8.dp)) {
             DartSlots(game, Palette.Orange, onSlot = onSlot)
             com.opendarts.ui.common.DashedDivider(Color.Gray.copy(alpha = 0.6f), Modifier.padding(vertical = 6.dp))
@@ -148,14 +148,14 @@ fun PlayerTabs(game: DartGame<*>, roomy: Boolean, modifier: Modifier = Modifier)
                                     } else if (s.caption.isNotEmpty()) Text(s.caption, color = Color.White.copy(alpha = 0.6f), fontFamily = Condensed, fontSize = 18.sp)
                                     Text(player.name.uppercase(), color = Color.White.copy(alpha = if (active) 1f else 0.55f), fontFamily = Condensed, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
-                                Text(s.big, color = Color.White, fontFamily = Condensed, fontSize = 46.sp, lineHeight = 48.sp, maxLines = 1)
+                                Text(s.big, color = Color.White, fontFamily = Condensed, fontSize = 38.sp, lineHeight = 40.sp, maxLines = 1)
                             }
                             Box(Modifier.fillMaxWidth().background(Color(0xFF1E1E1E)).padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
                                 Text(if (s.ppr != null) "PPR: ${s.ppr}" else s.caption.uppercase(), color = Color.White, fontFamily = Condensed, fontSize = 17.sp)
                             }
                         } else {
                             Column(Modifier.fillMaxWidth().padding(vertical = 5.dp, horizontal = 2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(s.big, color = Color.White, fontFamily = Condensed, fontSize = if (crowded) 30.sp else 38.sp, lineHeight = if (crowded) 32.sp else 40.sp, maxLines = 1)
+                                Text(s.big, color = Color.White, fontFamily = Condensed, fontSize = if (crowded) 26.sp else 32.sp, lineHeight = if (crowded) 28.sp else 34.sp, maxLines = 1)
                                 Text(
                                     player.name.uppercase(), color = Color.White.copy(alpha = if (active) 1f else 0.6f), fontFamily = Condensed,
                                     fontSize = if (crowded) 13.sp else 18.sp, lineHeight = if (crowded) 14.sp else 19.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,

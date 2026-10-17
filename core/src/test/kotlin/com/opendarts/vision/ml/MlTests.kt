@@ -247,12 +247,28 @@ class MlDartTrackerTest {
         repeat(3) { tracker.process(handAt(null)) }
         assertEquals(1, tracker.darts)
         visible = emptyList()
-        for (step in 0 until 12) {
+        for (step in 0 until 8) {
             val events = tracker.process(handAt(step % 4))
             assertTrue(events.none { it is TrackerEvent.DartsRemoved })
-            assertTrue(tracker.handInWay || step == 0)
+            assertTrue(tracker.handInWay)
         }
         assertEquals(1, tracker.darts)
+    }
+
+    private fun flat(level: Int) = ColorFrame(640, 480, ByteArray(640 * 480 * 3) { level.toByte() })
+
+    @Test
+    fun aWholePictureBrightnessFlickerIsNotAHand() {
+        for (i in 0 until 10) {
+            tracker.process(flat(if (i % 2 == 0) 90 else 150))
+            assertEquals(false, tracker.handInWay)
+        }
+    }
+
+    @Test
+    fun aPictureThatKeepsChangingIsEventuallyTakenAsNoiseNotAHand() {
+        for (step in 0 until 30) tracker.process(handAt(step % 4))
+        assertEquals(false, tracker.handInWay)
     }
 
     @Test

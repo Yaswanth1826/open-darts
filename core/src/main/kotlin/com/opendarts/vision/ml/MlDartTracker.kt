@@ -24,7 +24,7 @@ data class MlTrackerConfig(
     /** When the board cannot be found (a hand in front of it, a blurred frame) the last fit is kept for this many looks. */
     val holdLooks: Int = 10,
     /** A look where more than this share of the picture changed since the last one has a hand or arm in it (a landing dart changes far less). */
-    val handChangeShare: Double = 0.04,
+    val handChangeShare: Double = 0.05,
     /** Darts are only taken as pulled out after the scene has been still for this many looks, so a hand reaching in cannot pass the turn. */
     val calmLooksToRemove: Int = 2,
 )
