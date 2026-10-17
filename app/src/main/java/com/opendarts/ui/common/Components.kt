@@ -44,8 +44,8 @@ fun ScreenBox(background: Color, modifier: Modifier = Modifier, content: @Compos
 
 /** A dart seen from the side, tip to the left. */
 @Composable
-fun DartIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(width = 92.dp, height = 22.dp)) {
+fun DartIcon(color: Color, modifier: Modifier = Modifier, width: Dp = 92.dp) {
+    Canvas(modifier.size(width = width, height = width * (22f / 92f))) {
         val w = size.width
         val h = size.height
         val mid = h / 2f

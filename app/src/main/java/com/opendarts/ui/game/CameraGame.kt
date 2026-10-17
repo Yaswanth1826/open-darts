@@ -66,6 +66,7 @@ import com.opendarts.vision.TrackerState
 
 @Composable
 fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCalibrate: () -> Unit) {
+    ObserveGame()
     val context = LocalContext.current
     val store = remember { CalibrationStore(context) }
     var status by remember { mutableStateOf(CameraStatus()) }
@@ -102,7 +103,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     }
 
     val landscape = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    val round = "R${game.round}" + ((game as? X01Game)?.let { if (it.config.legsToWin > 1 || it.config.setsToWin > 1) " \u00B7 LEG ${it.gameState.legsPlayed + 1}" else "" }.orEmpty())
+    val round = "${session.setup.title.uppercase()}  \u00B7  R${game.round}" + ((game as? X01Game)?.let { if (it.config.legsToWin > 1 || it.config.setsToWin > 1) " \u00B7 LEG ${it.gameState.legsPlayed + 1}" else "" }.orEmpty())
     val cameraBox: @Composable (Modifier) -> Unit = { modifier ->
         CameraArea(
             camera, status, markers, aligning, guide, { guide = it }, showBoard, round, session.message, game.isFinished,
@@ -110,9 +111,9 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
             onCalibrate = onCalibrate, onTips = { tips = true }, onUndo = { session.undo() }, canUndo = game.canUndo, modifier = modifier,
         )
     }
-    val panel: @Composable () -> Unit = {
-        Column(Modifier.clip(RoundedCornerShape(20.dp))) {
-            CurrentCard(game, onSlot = { editing = it })
+    val panel: @Composable (Boolean) -> Unit = { fill ->
+        Column(if (fill) Modifier.fillMaxHeight().clip(RoundedCornerShape(18.dp)) else Modifier.clip(RoundedCornerShape(20.dp))) {
+            CurrentCard(game, if (fill) Modifier.weight(1f) else Modifier, fill = fill, onSlot = { editing = it })
             PlayerTabs(game, roomy = false)
         }
     }
@@ -132,13 +133,13 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
             DropdownMenuItem(text = { Text("Setup tips") }, onClick = { dismiss(); tips = true })
         }
         if (landscape) {
-            Row(Modifier.weight(1f).padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                cameraBox(Modifier.weight(1.3f).fillMaxHeight())
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { panel() }
+            Row(Modifier.weight(1f).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                cameraBox(Modifier.weight(1.15f).fillMaxHeight())
+                Box(Modifier.weight(1f).fillMaxHeight()) { panel(true) }
             }
         } else {
             cameraBox(Modifier.weight(1f).fillMaxWidth())
-            Box(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) { panel() }
+            Box(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) { panel(false) }
         }
     }
     if (tips) SetupTipsDialog { tips = false }
@@ -174,10 +175,10 @@ private fun CameraArea(
                     }
                 }
                 Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.Bottom) {
-                    Box(Modifier.clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.75f)).padding(horizontal = 12.dp, vertical = 6.dp)) {
-                        Text(round, color = Palette.Ink, fontFamily = Condensed, fontSize = 22.sp)
+                    Box(Modifier.weight(1f, fill = false).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.75f)).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                        Text(round, color = Palette.Ink, fontFamily = Condensed, fontSize = 18.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
-                    Box(Modifier.weight(1f))
+                    Box(Modifier.weight(0.01f))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OverlayButton(enabled = canUndo, onClick = onUndo) { Icon(Icons.AutoMirrored.Filled.Undo, "Undo", tint = Color.White) }
                         OverlayButton(onClick = { camera.findBoardAgain() }) { Icon(Icons.Default.Refresh, "Rescan", tint = Color.White) }

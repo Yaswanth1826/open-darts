@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -44,6 +46,7 @@ fun DartEditor(slot: Int, current: DartHit?, onPick: (DartHit?) -> Unit, onDismi
         onDismissRequest = onDismiss,
         title = { Text(if (current == null) "Dart ${slot + 1}: enter score" else "Dart ${slot + 1}: $current") },
         text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
             if (!choosing) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { choosing = true }, modifier = Modifier.fillMaxWidth()) { Text("Change score") }
@@ -75,6 +78,7 @@ fun DartEditor(slot: Int, current: DartHit?, onPick: (DartHit?) -> Unit, onDismi
                         NumberKey("Bull", Modifier.weight(1f)) { done(DartHit.INNER_BULL) }
                     }
                 }
+            }
             }
         },
         confirmButton = {},

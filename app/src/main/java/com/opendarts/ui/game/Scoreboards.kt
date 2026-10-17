@@ -35,6 +35,7 @@ import com.opendarts.game.x01.X01Game
 
 @Composable
 fun Scoreboard(game: DartGame<*>) {
+    ObserveGame()
     when (game) {
         is X01Game -> X01Board(game)
         is CricketGame -> CricketBoard(game)
