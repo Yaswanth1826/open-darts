@@ -56,6 +56,7 @@ import com.opendarts.ui.camera.Guide
 import com.opendarts.ui.camera.GuideOverlay
 import com.opendarts.ui.camera.ScoringCamera
 import com.opendarts.ui.camera.TfliteDartNet
+import com.opendarts.ui.camera.TrainingCollector
 import com.opendarts.ui.common.SetupTipsDialog
 import com.opendarts.ui.theme.Condensed
 import com.opendarts.ui.theme.CondensedRegular
@@ -74,7 +75,8 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     var aligning by remember { mutableStateOf(false) }
     var tips by remember { mutableStateOf(false) }
     var outline by remember { mutableStateOf<Boolean?>(null) }
-    var everyDart by remember { mutableStateOf(false) }
+    var collecting by remember { mutableStateOf(false) }
+    val collector = remember { TrainingCollector(context) }
     var saved by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<Int?>(null) }
     val showBoard = outline ?: !status.usingAi
@@ -94,6 +96,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
             onStatus = { status = it },
             capture = DebugCapture(context),
             net = TfliteDartNet.loadOrNull(context),
+            collector = collector,
         ).also { if (session.manualCalibration) it.useManualCalibration() }
     }
     DisposableEffect(camera) { onDispose { camera.release() } }
@@ -129,7 +132,16 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
                 dismiss()
                 camera.saveFrame("misread") { name -> saved = if (name.isEmpty()) "Could not save the frame" else "Saved to Pictures/OpenDarts" }
             })
-            DropdownMenuItem(text = { Text((if (everyDart) "\u2713 " else "") + "Save a frame for every dart") }, onClick = { dismiss(); everyDart = !everyDart; camera.captureEveryDart = everyDart })
+            DropdownMenuItem(
+                text = { Text((if (collecting) "\u2713 " else "") + "Collect training photos" + if (status.collected > 0) " (${status.collected})" else "") },
+                onClick = { dismiss(); collecting = !collecting; camera.collecting = collecting },
+            )
+            if (status.collected > 0) {
+                DropdownMenuItem(text = { Text("Share training photos") }, onClick = {
+                    dismiss()
+                    Thread { collector.shareIntent()?.let { intent -> android.os.Handler(android.os.Looper.getMainLooper()).post { context.startActivity(intent) } } }.start()
+                })
+            }
             DropdownMenuItem(text = { Text("Setup tips") }, onClick = { dismiss(); tips = true })
         }
         if (landscape) {
@@ -146,8 +158,8 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     editing?.let { slot ->
         DartEditor(
             slot, game.turnHits.getOrNull(slot), front = game.turnHits.take(slot), canLookBehind = session.canLookBehind(slot),
-            onPick = { session.editDart(slot, it) }, onBehind = { session.dartBehind(slot, it) },
-            onLookBehind = { session.editDart(slot, null, lookBehind = true)?.let(camera::releaseSpot) }, onDismiss = { editing = null },
+            onPick = { camera.flagLatestPhoto(); session.editDart(slot, it) }, onBehind = { session.dartBehind(slot, it) },
+            onLookBehind = { camera.flagLatestPhoto(); session.editDart(slot, null, lookBehind = true)?.let(camera::releaseSpot) }, onDismiss = { editing = null },
         )
     }
     saved?.let { msg ->
@@ -206,7 +218,7 @@ private fun OverlayButton(enabled: Boolean = true, onClick: () -> Unit, content:
 @Composable
 private fun StatusPill(status: CameraStatus, message: String, modifier: Modifier) {
     val text = when (status.phase) {
-        CameraPhase.TRACKING -> when (status.tracker) {
+        CameraPhase.TRACKING -> if (status.handInWay) "Hand in the way \u2013 waiting" else when (status.tracker) {
             TrackerState.WAITING_FOR_BOARD -> "Scanning the empty board \u2013 keep hands clear"
             TrackerState.MOVING -> "Detecting\u2026"
             TrackerState.SETTLING -> "Hold on\u2026"

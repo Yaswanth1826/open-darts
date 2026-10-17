@@ -34,6 +34,10 @@ data class CameraStatus(
     val usingAi: Boolean = false,
     /** How the camera sees the board (angle, size, cut-off), once the network has found it. */
     val view: BoardView? = null,
+    /** A hand or arm is moving in front of the board, so darts are neither added nor taken off until it has gone. */
+    val handInWay: Boolean = false,
+    /** Training photos stored on the phone. */
+    val collected: Int = 0,
 )
 
 /**
@@ -49,6 +53,7 @@ class ScoringCamera(
     private val onStatus: (CameraStatus) -> Unit,
     private val capture: DebugCapture? = null,
     private val net: DartNet? = null,
+    private val collector: TrainingCollector? = null,
 ) {
     private val mlTracker = net?.let { MlDartTracker(TwoPassDetector(it)::detect) }
     @Volatile private var mlActive = net != null
@@ -73,8 +78,14 @@ class ScoringCamera(
     @Volatile private var lastFrame: CameraFrame? = null
     @Volatile private var lastColor: com.opendarts.vision.ml.ColorFrame? = null
 
-    /** Saves a frame with every detected dart, to study or tune detection later. */
-    @Volatile var captureEveryDart = false
+    /** Keeps a labelled photo of every dart (and of the emptied board) to retrain the network on real pictures. */
+    @Volatile var collecting = false
+    @Volatile private var collected = collector?.count() ?: 0
+
+    /** The player corrected a dart, so the latest photo's labels need a second look before training. */
+    fun flagLatestPhoto() {
+        if (collecting) collector?.flagLatest()
+    }
 
     /** Saves the latest frame now (for example when a dart was misread). */
     fun saveFrame(label: String, onSaved: (String) -> Unit) {
@@ -184,12 +195,7 @@ class ScoringCamera(
         if (startRequested.getAndSet(false)) t.startNow()
         val events = t.process(frame)
         publish(CameraStatus(CameraPhase.TRACKING, t.state, t.darts, fit, frame.width, frame.height))
-        events.forEach { event ->
-            if (captureEveryDart && event is TrackerEvent.DartLanded) {
-                capture?.save(frame, "dart-${event.hit.multiplier.name}-${event.hit.base}", fit, listOf(event.pixel))
-            }
-            main.post { onEvent(event) }
-        }
+        events.forEach { event -> main.post { onEvent(event) } }
     }
 
     private fun look(camera: CameraFrame, tracker: MlDartTracker) {
@@ -211,12 +217,25 @@ class ScoringCamera(
             missedLooks >= NOT_FOUND_LOOKS -> CameraPhase.NOT_FOUND
             else -> CameraPhase.FINDING_BOARD
         }
-        publish(CameraStatus(phase, tracker.state, tracker.darts, tracker.boardToPixel, colour.width, colour.height, usingAi = true, view = tracker.view.takeIf { ready }))
+        publish(CameraStatus(phase, tracker.state, tracker.darts, tracker.boardToPixel, colour.width, colour.height, usingAi = true, view = tracker.view.takeIf { ready }, handInWay = tracker.handInWay, collected = collected))
         events.forEach { event ->
-            if (captureEveryDart && event is TrackerEvent.DartLanded) {
-                capture?.save(camera.gray, "ai-dart-${event.hit.multiplier.name}-${event.hit.base}", tracker.boardToPixel, listOf(event.pixel), colour)
-            }
+            if (collecting) collect(event, colour, tracker)
             main.post { onEvent(event) }
+        }
+    }
+
+    private fun collect(event: TrackerEvent, colour: com.opendarts.vision.ml.ColorFrame, tracker: MlDartTracker) {
+        val corners = tracker.cornerPixels ?: return
+        val note = when {
+            event is TrackerEvent.DartLanded -> "dart-${event.hit.multiplier.name}-${event.hit.base}"
+            event is TrackerEvent.DartsRemoved && event.remaining == 0 -> "empty"
+            else -> return
+        }
+        collector?.save(colour, corners, tracker.dartPixels, note) { n ->
+            if (n >= 0) {
+                collected = n
+                lastStatus?.let { publish(it.copy(collected = n)) }
+            }
         }
     }
 
@@ -268,6 +287,7 @@ class ScoringCamera(
         detector.shutdown()
         (net as? AutoCloseable)?.close()
         capture?.release()
+        collector?.release()
     }
 
     private companion object {

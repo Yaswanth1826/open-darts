@@ -7,8 +7,8 @@ Expected layout of --dataset-dir:
 Classes: 0 = dart tip, 1..4 = calibration points (see BoardGeometry.MODEL_CALIBRATION_POINTS in the app):
 the outer edge of the double ring at the 5|20, 17|3, 8|11 and 13|6 wires.
 
-Extra labelled data in the same YOLO layout (for example frames from the app's "Save every dart" captures after you
-label them) can be added with --extra, which expects <dir>/images/*.jpg and <dir>/labels/*.txt.
+Extra labelled data in the same YOLO layout (for example the output of from_captures.py, which converts the photos
+collected by the app's "Collect training photos" mode) can be added with --extra, which expects <dir>/images/*.jpg and <dir>/labels/*.txt.
 
 --oblique N adds N side-view copies of every training picture. The DeepDarts pictures are all flattened to a square-on
 board, but the app's phone sits beside the board, so each copy is warped the way a camera turned up to 65 degrees to
@@ -100,6 +100,7 @@ def main():
     parser.add_argument("--size", default="800")
     parser.add_argument("--datasets", nargs="+", default=["d1", "d2"], help="which DeepDarts sets to use")
     parser.add_argument("--extra", nargs="*", default=[], help="extra YOLO-format folders (images/ and labels/)")
+    parser.add_argument("--extra-repeat", type=int, default=1, help="how many times each extra picture is added, so a few hundred of your own photos are not drowned by the 37000 others")
     parser.add_argument("--oblique", type=int, default=0, help="side-view copies of every training picture")
     args = parser.parse_args()
     rng = np.random.RandomState(0)
@@ -144,9 +145,10 @@ def main():
             label = os.path.join(extra, "labels", stem + ".txt")
             if not os.path.exists(label):
                 continue
-            link(os.path.join(extra, "images", name), os.path.join(args.out, "images", "train", f"extra_{stem}{ext}"))
-            shutil.copy(label, os.path.join(args.out, "labels", "train", f"extra_{stem}.txt"))
-            counts["train"] += 1
+            for k in range(args.extra_repeat):
+                link(os.path.join(extra, "images", name), os.path.join(args.out, "images", "train", f"extra{k}_{stem}{ext}"))
+                shutil.copy(label, os.path.join(args.out, "labels", "train", f"extra{k}_{stem}.txt"))
+                counts["train"] += 1
 
     with open(os.path.join(args.out, "data.yaml"), "w") as f:
         f.write(

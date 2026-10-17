@@ -231,6 +231,49 @@ class MlDartTrackerTest {
     private fun look() = tracker.process(frame)
     private fun landed(events: List<TrackerEvent>) = events.filterIsInstance<TrackerEvent.DartLanded>()
 
+    /** A frame with a bright block (a hand) at the given step along its path, or the plain scene. */
+    private fun handAt(step: Int?): ColorFrame {
+        val rgb = ByteArray(640 * 480 * 3)
+        if (step != null) for (y in 100 until 300) for (x in 20 + step * 100 until 220 + step * 100) {
+            val i = (y * 640 + x) * 3
+            rgb[i] = -1; rgb[i + 1] = -1; rgb[i + 2] = -1
+        }
+        return ColorFrame(640, 480, rgb)
+    }
+
+    @Test
+    fun aHandCoveringTheDartsDoesNotPullThemOrPassTheTurn() {
+        visible = listOf(pixelOf(DartHit(20, Multiplier.TRIPLE)))
+        repeat(3) { tracker.process(handAt(null)) }
+        assertEquals(1, tracker.darts)
+        visible = emptyList()
+        for (step in 0 until 12) {
+            val events = tracker.process(handAt(step % 4))
+            assertTrue(events.none { it is TrackerEvent.DartsRemoved })
+            assertTrue(tracker.handInWay || step == 0)
+        }
+        assertEquals(1, tracker.darts)
+    }
+
+    @Test
+    fun dartsAreRemovedOnceTheHandHasGoneAndTheSceneIsStill() {
+        visible = listOf(pixelOf(DartHit(20, Multiplier.TRIPLE)))
+        repeat(3) { tracker.process(handAt(null)) }
+        visible = emptyList()
+        for (step in 0 until 4) tracker.process(handAt(step))
+        val events = (0 until 6).flatMap { tracker.process(handAt(null)) }
+        assertEquals(0, tracker.darts)
+        assertEquals(TrackerEvent.DartsRemoved(0), events.filterIsInstance<TrackerEvent.DartsRemoved>().single())
+    }
+
+    @Test
+    fun aDartHeldInAMovingHandIsNotScored() {
+        repeat(2) { tracker.process(handAt(null)) }
+        visible = listOf(pixelOf(DartHit(20, Multiplier.TRIPLE)))
+        for (step in 0 until 8) assertTrue(landed(tracker.process(handAt(step % 4))).isEmpty())
+        assertEquals(0, tracker.darts)
+    }
+
     @Test
     fun scoresADartOnceItHasBeenSeenTwice() {
         visible = listOf(pixelOf(DartHit(20, Multiplier.TRIPLE)))

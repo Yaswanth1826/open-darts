@@ -23,6 +23,10 @@ data class MlTrackerConfig(
     val jumpLooksToReset: Int = 3,
     /** When the board cannot be found (a hand in front of it, a blurred frame) the last fit is kept for this many looks. */
     val holdLooks: Int = 10,
+    /** A look where more than this share of the picture changed since the last one has a hand or arm in it (a landing dart changes far less). */
+    val handChangeShare: Double = 0.04,
+    /** Darts are only taken as pulled out after the scene has been still for this many looks, so a hand reaching in cannot pass the turn. */
+    val calmLooksToRemove: Int = 2,
 )
 
 /**
@@ -42,6 +46,8 @@ class MlDartTracker(
     private var corners: List<Point>? = null
     private var jumps = 0
     private var lost = 0
+    private val scene = SceneMotion(config.handChangeShare)
+    private var calmLooks = 0
 
     var state = TrackerState.WAITING_FOR_BOARD
         private set
@@ -50,6 +56,16 @@ class MlDartTracker(
     var view: BoardView? = null
         private set
     val darts: Int get() = known.size
+
+    /** True while the last look had a hand or arm moving in front of the board. */
+    var handInWay = false
+        private set
+
+    /** The four calibration points (cal1..cal4) as last found, in frame pixels. */
+    val cornerPixels: List<Point>? get() = corners
+
+    /** The darts counted on the board, in frame pixels. */
+    val dartPixels: List<Point> get() = known.map { it.pixel }
 
     /** Forgets the darts and takes the board as empty. */
     fun markBoardEmpty() {
@@ -69,6 +85,8 @@ class MlDartTracker(
     }
 
     fun process(frame: ColorFrame): List<TrackerEvent> {
+        handInWay = scene.moved(frame)
+        calmLooks = if (handInWay) 0 else calmLooks + 1
         val found = detect(frame, corners)
         val cal = completeCorners(found.corners, boardToPixel) ?: return lostBoard()
         val fit = fit(cal, frame) ?: return lostBoard()
@@ -93,13 +111,17 @@ class MlDartTracker(
                 unmatched.remove(near)
                 dart.misses = 0
             } else {
-                dart.misses++
+                if (!handInWay) dart.misses++
             }
         }
-        known.removeAll { (it.misses >= config.removeAfterMisses).also { gone -> if (gone) removed++ } }
+        if (calmLooks >= config.calmLooksToRemove) {
+            known.removeAll { (it.misses >= config.removeAfterMisses).also { gone -> if (gone) removed++ } }
+        }
 
         val next = ArrayList<Candidate>()
-        for ((board, pixel) in unmatched) {
+        if (handInWay) {
+            next += candidates
+        } else for ((board, pixel) in unmatched) {
             val candidate = candidates.firstOrNull { dist(it.board, board) <= config.sameDartMm }
             if (candidate != null) {
                 candidates.remove(candidate)
