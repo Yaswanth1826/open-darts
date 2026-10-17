@@ -107,7 +107,7 @@ class MlDartTracker(
         boardToPixel = fit
         view = PlacementAdvisor.assess(fit, frame.width, frame.height)
 
-        val seenNow = found.darts.mapNotNull { pixel ->
+        val seenNow = DartAxis.tips(found.darts, fit, frame.width, frame.height).mapNotNull { pixel ->
             val board = toBoard.apply(pixel)
             if (hypot(board.x, board.y) <= config.ignoreBeyondMm) board to pixel else null
         }.toMutableList()

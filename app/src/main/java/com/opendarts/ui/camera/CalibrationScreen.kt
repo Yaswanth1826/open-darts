@@ -53,7 +53,7 @@ fun CalibrationScreen(onDone: () -> Unit, onCancel: () -> Unit, onSaved: () -> U
         )
         CameraPermissionGate {
             Box(Modifier.fillMaxWidth().weight(1f)) {
-                CameraView(Modifier.fillMaxSize(), onFrame = { frame -> frameAspect = frame.gray.width.toDouble() / frame.gray.height })
+                CameraView(Modifier.fillMaxSize(), zoom = remember { CameraZoom.load(context) }, onFrame = { frame -> frameAspect = frame.gray.width.toDouble() / frame.gray.height })
                 if (frameAspect > 0) {
                     Canvas(
                         Modifier.fillMaxSize().pointerInput(frameAspect) {

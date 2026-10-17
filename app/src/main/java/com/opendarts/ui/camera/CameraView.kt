@@ -23,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,7 +56,12 @@ fun CameraPermissionGate(modifier: Modifier = Modifier, content: @Composable () 
  * greyscale frame, roughly 960x720). The preview is letter-boxed (FIT) so view coordinates map linearly to frame coordinates.
  */
 @Composable
-fun CameraView(modifier: Modifier = Modifier, onFrame: ((CameraFrame) -> Unit)? = null) {
+fun CameraView(
+    modifier: Modifier = Modifier,
+    zoom: Float = 1f,
+    onZoomRange: (min: Float, max: Float) -> Unit = { _, _ -> },
+    onFrame: ((CameraFrame) -> Unit)? = null,
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember {
@@ -66,6 +72,14 @@ fun CameraView(modifier: Modifier = Modifier, onFrame: ((CameraFrame) -> Unit)? 
         }
     }
     val frameCallback by rememberUpdatedState(onFrame)
+    val rangeCallback by rememberUpdatedState(onZoomRange)
+    var camera by remember { mutableStateOf<androidx.camera.core.Camera?>(null) }
+    LaunchedEffect(camera, zoom) {
+        val control = camera?.cameraControl ?: return@LaunchedEffect
+        val range = camera?.cameraInfo?.zoomState?.value
+        val ratio = if (range != null) zoom.coerceIn(range.minZoomRatio, range.maxZoomRatio) else zoom
+        runCatching { control.setZoomRatio(ratio) }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val future = ProcessCameraProvider.getInstance(context)
@@ -95,7 +109,9 @@ fun CameraView(modifier: Modifier = Modifier, onFrame: ((CameraFrame) -> Unit)? 
             }
             runCatching {
                 provider.unbindAll()
-                provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+                val bound = provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+                bound.cameraInfo.zoomState.observe(lifecycleOwner) { rangeCallback(it.minZoomRatio, it.maxZoomRatio) }
+                camera = bound
             }
         }, ContextCompat.getMainExecutor(context))
         onDispose {

@@ -2,6 +2,7 @@ package com.opendarts.ui.game
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,13 +28,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -51,6 +55,7 @@ import com.opendarts.ui.camera.CameraStatus
 import com.opendarts.vision.ml.BoardView
 import com.opendarts.vision.ml.Placement
 import com.opendarts.ui.camera.CameraView
+import com.opendarts.ui.camera.CameraZoom
 import com.opendarts.ui.camera.DebugCapture
 import com.opendarts.ui.camera.Guide
 import com.opendarts.ui.camera.GuideOverlay
@@ -77,6 +82,9 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     var outline by remember { mutableStateOf<Boolean?>(null) }
     val collector = remember { TrainingCollector(context) }
     var collecting by remember { mutableStateOf(collector.enabled) }
+    var zoom by remember { mutableFloatStateOf(CameraZoom.load(context)) }
+    var zoomRange by remember { mutableStateOf(1f..1f) }
+    val chooseZoom = { value: Float -> zoom = value.coerceIn(zoomRange.start, zoomRange.endInclusive); CameraZoom.save(context, zoom) }
     var saved by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<Int?>(null) }
     val showBoard = outline ?: !status.usingAi
@@ -111,7 +119,8 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
         CameraArea(
             camera, status, markers, aligning, guide, { guide = it }, showBoard, round, session.message, game.isFinished,
             onAlign = { aligning = true }, onLock = { camera.useGuide(guide); aligning = false }, onCancelAlign = { aligning = false },
-            onCalibrate = onCalibrate, onTips = { tips = true }, onUndo = { session.undo() }, canUndo = game.canUndo, modifier = modifier,
+            onCalibrate = onCalibrate, onTips = { tips = true }, onUndo = { session.undo() }, canUndo = game.canUndo,
+            zoom = zoom, zoomRange = zoomRange, onZoomRange = { low, high -> zoomRange = low..high }, onZoom = chooseZoom, modifier = modifier,
         )
     }
     val panel: @Composable (Boolean) -> Unit = { fill ->
@@ -174,15 +183,21 @@ private fun CameraArea(
     camera: ScoringCamera, status: CameraStatus, markers: List<Point>, aligning: Boolean, guide: Guide, onGuide: (Guide) -> Unit,
     showBoard: Boolean, round: String, message: String, finished: Boolean,
     onAlign: () -> Unit, onLock: () -> Unit, onCancelAlign: () -> Unit, onCalibrate: () -> Unit, onTips: () -> Unit,
-    onUndo: () -> Unit, canUndo: Boolean, modifier: Modifier,
+    onUndo: () -> Unit, canUndo: Boolean,
+    zoom: Float, zoomRange: ClosedFloatingPointRange<Float>, onZoomRange: (Float, Float) -> Unit, onZoom: (Float) -> Unit,
+    modifier: Modifier,
 ) {
     val portrait = LocalConfiguration.current.orientation != android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val zoomNow by rememberUpdatedState(zoom)
+    val zoomTo by rememberUpdatedState(onZoom)
     val aspect = if (status.frameWidth > 0) status.frameWidth.toFloat() / status.frameHeight else if (portrait) 0.75f else 1.3333f
     Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
         CameraPermissionGate(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Box(Modifier.aspectRatio(aspect)) {
-                    CameraView(Modifier.fillMaxSize(), onFrame = camera::onFrame)
+                Box(Modifier.aspectRatio(aspect).pointerInput(zoomRange) {
+                    detectTransformGestures { _, _, pinch, _ -> if (pinch != 1f) zoomTo(zoomNow * pinch) }
+                }) {
+                    CameraView(Modifier.fillMaxSize(), zoom = zoom, onZoomRange = onZoomRange, onFrame = camera::onFrame)
                     if (aligning) GuideOverlay(guide, onGuide, Modifier.fillMaxSize()) else BoardOverlay(status, markers, Modifier.fillMaxSize(), showBoard = showBoard)
                 }
                 Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(10.dp)) {
@@ -192,6 +207,7 @@ private fun CameraArea(
                         else -> StatusPill(status, message, showBoard, Modifier.align(Alignment.CenterHorizontally))
                     }
                 }
+                ZoomButtons(zoom, zoomRange, onZoom, Modifier.align(Alignment.CenterEnd).padding(end = 10.dp))
                 Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.Bottom) {
                     Box(Modifier.weight(1f, fill = false).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.75f)).padding(horizontal = 12.dp, vertical = 6.dp)) {
                         Text(round, color = Palette.Ink, fontFamily = Condensed, fontSize = 18.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
@@ -203,6 +219,23 @@ private fun CameraArea(
                     }
                 }
             }
+        }
+    }
+}
+
+/** Zoom steps the camera can do, for when the board does not fit the view (zoom out) or is small (zoom in); pinching works too. */
+@Composable
+private fun ZoomButtons(zoom: Float, range: ClosedFloatingPointRange<Float>, onZoom: (Float) -> Unit, modifier: Modifier) {
+    val steps = com.opendarts.ui.camera.CameraZoom.steps(range.start, range.endInclusive)
+    if (steps.size < 2) return
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        steps.forEach { step ->
+            val chosen = kotlin.math.abs(step - zoom) < 0.05f
+            Box(
+                Modifier.size(width = 46.dp, height = 36.dp).clip(RoundedCornerShape(18.dp))
+                    .background(if (chosen) Palette.Link else Palette.Charcoal.copy(alpha = 0.75f)).clickable { onZoom(step) },
+                contentAlignment = Alignment.Center,
+            ) { Text(if (step < 1f) "%.1fx".format(step) else "${step.toInt()}x", color = Color.White, fontFamily = Condensed, fontSize = 16.sp) }
         }
     }
 }

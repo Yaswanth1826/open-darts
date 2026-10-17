@@ -4,6 +4,9 @@ import kotlin.math.abs
 
 /** 3x3 projective transform: maps one plane to another (camera pixels <-> board millimetres). */
 class Homography private constructor(private val m: DoubleArray) {
+    /** The nine entries, row by row. */
+    val matrix: DoubleArray get() = m.copyOf()
+
     fun apply(x: Double, y: Double): Point {
         val w = m[6] * x + m[7] * y + m[8]
         return Point((m[0] * x + m[1] * y + m[2]) / w, (m[3] * x + m[4] * y + m[5]) / w)
