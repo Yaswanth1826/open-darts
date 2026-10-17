@@ -28,7 +28,10 @@ import java.util.concurrent.Executors
 class DebugCapture(private val context: Context) {
     private val io = Executors.newSingleThreadExecutor()
 
+    @Volatile private var released = false
+
     fun save(frame: GrayFrame, label: String, fit: Homography?, darts: List<Point>, color: ColorFrame? = null, onSaved: (String) -> Unit = {}) {
+        if (released) return
         io.execute {
             val stamp = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date())
             val base = "$stamp-${label.filter { it.isLetterOrDigit() || it == '-' }.take(40)}"
@@ -41,7 +44,10 @@ class DebugCapture(private val context: Context) {
         }
     }
 
-    fun release() = io.shutdown()
+    fun release() {
+        released = true
+        io.shutdown()
+    }
 
     private fun toBitmap(frame: GrayFrame): Bitmap {
         val pixels = IntArray(frame.width * frame.height) {

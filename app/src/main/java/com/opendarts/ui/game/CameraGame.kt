@@ -75,6 +75,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     var outline by remember { mutableStateOf<Boolean?>(null) }
     var everyDart by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf<String?>(null) }
+    var editing by remember { mutableStateOf<Int?>(null) }
     val showBoard = outline ?: !status.usingAi
     var guide by remember { mutableStateOf(Guide()) }
     val camera = remember {
@@ -111,13 +112,13 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     }
     val panel: @Composable () -> Unit = {
         Column(Modifier.clip(RoundedCornerShape(20.dp))) {
-            CurrentCard(game)
+            CurrentCard(game, onSlot = { editing = it })
             PlayerTabs(game, roomy = false)
         }
     }
 
     Column(Modifier.fillMaxSize().background(Palette.Slate).systemBarsPadding()) {
-        GameTopBar(session, game, onExit, onNextPlayer = { session.nextPlayer() }) { dismiss ->
+        GameTopBar(session, game, onExit, onPrevious = { session.previousPlayer() }, onNextPlayer = { session.nextPlayer() }) { dismiss ->
             DropdownMenuItem(text = { Text("Rescan board") }, onClick = { dismiss(); camera.findBoardAgain() })
             DropdownMenuItem(text = { Text("Board is clear \u2013 start now") }, enabled = status.phase == CameraPhase.TRACKING, onClick = { dismiss(); camera.startNow() })
             DropdownMenuItem(text = { Text("Align board by hand") }, onClick = { dismiss(); aligning = true })
@@ -141,6 +142,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
         }
     }
     if (tips) SetupTipsDialog { tips = false }
+    editing?.let { slot -> DartEditor(slot, game.turnHits.getOrNull(slot), onPick = { session.editDart(slot, it) }, onDismiss = { editing = null }) }
     saved?.let { msg ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { saved = null }, confirmButton = { androidx.compose.material3.TextButton(onClick = { saved = null }) { Text("OK") } }, text = { Text(msg) },

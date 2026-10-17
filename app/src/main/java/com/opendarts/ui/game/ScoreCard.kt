@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,13 +45,20 @@ fun standing(game: DartGame<*>, index: Int): Standing {
     return Standing(big, caption, null, null, if (active) game.turnHits.sumOf { it.points } else 0)
 }
 
-/** The darts of the current turn: a dart icon until it lands, then what it hit. */
+/**
+ * The darts of the current turn: a dart icon until it lands, then what it hit. With [onSlot], tapping a thrown dart
+ * (or the next empty one) lets the player change, remove or enter its score.
+ */
 @Composable
-fun DartSlots(game: DartGame<*>, iconColour: Color, modifier: Modifier = Modifier) {
+fun DartSlots(game: DartGame<*>, iconColour: Color, modifier: Modifier = Modifier, onSlot: ((Int) -> Unit)? = null) {
     Row(modifier.fillMaxWidth().height(46.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
         for (i in 0 until game.dartsPerTurn) {
             val hit = game.turnHits.getOrNull(i)
-            Box(Modifier.widthIn(min = 92.dp), contentAlignment = Alignment.Center) {
+            val tappable = onSlot != null && i <= game.turnHits.size
+            Box(
+                Modifier.widthIn(min = 92.dp).height(46.dp).then(if (tappable) Modifier.clickable { onSlot?.invoke(i) } else Modifier),
+                contentAlignment = Alignment.Center,
+            ) {
                 if (hit == null) DartIcon(iconColour) else Text(hit.toString(), color = Palette.Ink, fontFamily = Condensed, fontSize = 32.sp)
             }
         }
@@ -72,11 +80,11 @@ private fun TurnBox(total: Int, dark: Boolean) {
 
 /** Big white card over the camera: the current player's score with the darts of this turn above it. */
 @Composable
-fun CurrentCard(game: DartGame<*>, modifier: Modifier = Modifier) {
+fun CurrentCard(game: DartGame<*>, modifier: Modifier = Modifier, onSlot: ((Int) -> Unit)? = null) {
     val i = game.currentPlayerIndex
     val s = standing(game, i)
     Column(modifier.fillMaxWidth().background(Color.White).padding(horizontal = 14.dp, vertical = 8.dp)) {
-        DartSlots(game, Palette.Orange)
+        DartSlots(game, Palette.Orange, onSlot = onSlot)
         com.opendarts.ui.common.DashedDivider(Color.Gray.copy(alpha = 0.6f), Modifier.padding(vertical = 6.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

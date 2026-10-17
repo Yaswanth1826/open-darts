@@ -22,8 +22,11 @@ class TfliteDartNet private constructor(private val interpreter: Interpreter) : 
     private val input = ByteBuffer.allocateDirect(inputSize * inputSize * 3 * 4).order(ByteOrder.nativeOrder())
     private val output = ByteBuffer.allocateDirect(outputShape.fold(1) { a, b -> a * b } * 4).order(ByteOrder.nativeOrder())
 
+    @Volatile private var closed = false
+
     @Synchronized
     override fun run(image: ColorFrame): List<Detection> {
+        if (closed) return emptyList()
         require(image.width == inputSize && image.height == inputSize)
         input.rewind()
         val floats = input.asFloatBuffer()
@@ -43,7 +46,13 @@ class TfliteDartNet private constructor(private val interpreter: Interpreter) : 
         return YoloDecoder.decode(values, dims[0], dims[1], inputSize)
     }
 
-    override fun close() = interpreter.close()
+    /** Waits for a running look to finish, so the interpreter is never freed while it is in use. */
+    @Synchronized
+    override fun close() {
+        if (closed) return
+        closed = true
+        interpreter.close()
+    }
 
     companion object {
         const val ASSET = "dartnet.tflite"

@@ -14,8 +14,8 @@ data class MlTrackerConfig(
     val removeAfterMisses: Int = 3,
     /** Detections closer than this (mm on the board) are the same dart. */
     val sameDartMm: Double = 12.0,
-    /** Darts further than this from the bull are not on the board. */
-    val ignoreBeyondMm: Double = 185.0,
+    /** Detections further than this from the bull are not darts in the board (the bezel, the logo, a hand), so they never count as a miss. */
+    val ignoreBeyondMm: Double = 176.0,
     val maxDartsOnBoard: Int = 3,
     /** Corner positions are blended with the previous ones unless they jump by more than this share of the frame diagonal. */
     val smoothing: Double = 0.4,

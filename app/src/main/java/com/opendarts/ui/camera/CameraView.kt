@@ -70,6 +70,7 @@ fun CameraView(modifier: Modifier = Modifier, onFrame: ((CameraFrame) -> Unit)? 
     DisposableEffect(lifecycleOwner) {
         val future = ProcessCameraProvider.getInstance(context)
         val executor = Executors.newSingleThreadExecutor()
+        var analysisUseCase: ImageAnalysis? = null
         future.addListener({
             val provider = future.get()
             val selector = ResolutionSelector.Builder()
@@ -82,9 +83,12 @@ fun CameraView(modifier: Modifier = Modifier, onFrame: ((CameraFrame) -> Unit)? 
                 .setResolutionSelector(selector)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
+            analysisUseCase = analysis
             analysis.setAnalyzer(executor) { image: ImageProxy ->
                 try {
                     frameCallback?.let { callback -> callback(CameraFrame(image.toUprightGray()) { image.toUprightColor() }) }
+                } catch (e: Exception) {
+                    android.util.Log.w("CameraView", "frame skipped", e)
                 } finally {
                     image.close()
                 }
@@ -95,8 +99,10 @@ fun CameraView(modifier: Modifier = Modifier, onFrame: ((CameraFrame) -> Unit)? 
             }
         }, ContextCompat.getMainExecutor(context))
         onDispose {
-            executor.shutdown()
+            // Stop the frames first: a frame offered to an executor that is already shut down is an exception inside CameraX.
+            runCatching { analysisUseCase?.clearAnalyzer() }
             runCatching { if (future.isDone) future.get().unbindAll() }
+            executor.shutdown()
         }
     }
     AndroidView(factory = { previewView }, modifier = modifier)

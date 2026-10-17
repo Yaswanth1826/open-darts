@@ -125,6 +125,35 @@ abstract class DartGame<S : Any>(val players: List<Player>, val dartsPerTurn: In
         return true
     }
 
+    /**
+     * Goes back to the previous player's turn with their darts still in place, so they can be corrected with [editDart].
+     * Darts already thrown by the current player this turn are discarded. Returns false at the very start of the game.
+     */
+    fun previousPlayer(): Boolean {
+        current()
+        val handover = history.indexOfLast { it.transition }
+        if (handover < 0) return false
+        while (history.size > handover) history.removeAt(history.lastIndex)
+        return true
+    }
+
+    /**
+     * Changes ([hit]) or removes (null) the dart at [index] of the turn on screen, and replays the turn so every rule
+     * (busts, wins, marks, the score of the following darts) comes out exactly as if the darts had been thrown that way.
+     * Darts that can no longer be thrown, for example after a replaced dart now ends the turn, are dropped.
+     */
+    fun editDart(index: Int, hit: DartHit?): Boolean {
+        val hits = current().turn.toMutableList()
+        if (index !in hits.indices) return false
+        if (hit == null) hits.removeAt(index) else hits[index] = hit
+        while (history.size > 1 && history.last().turn.isNotEmpty()) history.removeAt(history.lastIndex)
+        for (h in hits) {
+            if (current().turnOver || current().winners != null) break
+            throwDart(h)
+        }
+        return true
+    }
+
     private fun finalise(snap: Snapshot<S>): Snapshot<S> {
         val finish = onTurnFinished(snap.game, snap.player, snap.turn, snap.round)
         val winners = snap.winners ?: finish.winners

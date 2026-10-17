@@ -82,6 +82,33 @@ class GameSession : ViewModel() {
         revision++
     }
 
+    /** Goes back to the previous player's turn, keeping their darts so they can be corrected. */
+    fun previousPlayer() {
+        val g = game ?: return
+        if (g.previousPlayer()) {
+            message = "Back to ${g.currentPlayer.name}"
+            dismissedResult = false
+        } else message = "Already at the first turn"
+        revision++
+    }
+
+    /** Sets dart [index] of the turn on screen to [hit], removes it ([hit] null), or adds it when it is the next empty slot. */
+    fun editDart(index: Int, hit: DartHit?) {
+        val g = game ?: return
+        val done = when {
+            index < g.turnHits.size -> g.editDart(index, hit)
+            hit != null && index == g.turnHits.size && !g.isFinished -> { g.throwDart(hit); true }
+            else -> false
+        }
+        if (!done) return
+        message = when {
+            hit == null -> "Dart ${index + 1} removed"
+            else -> "${g.currentPlayer.name}: dart ${index + 1} is $hit"
+        }
+        dismissedResult = false
+        revision++
+    }
+
     /** Called when the camera sees the board cleared: hands over only if the current player actually threw. */
     fun dartsPulled() {
         val g = game ?: return

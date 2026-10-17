@@ -28,7 +28,7 @@ import com.opendarts.ui.theme.Palette
 
 /** Tap-to-score pad: miss and bulls on top, then singles, doubles and trebles for every number. */
 @Composable
-fun Keypad(canUndo: Boolean, enabled: Boolean, onHit: (DartHit) -> Unit, onUndo: () -> Unit, onNext: () -> Unit, modifier: Modifier = Modifier) {
+fun Keypad(canUndo: Boolean, enabled: Boolean, onHit: (DartHit) -> Unit, onUndo: () -> Unit, onPrevious: () -> Unit, onNext: () -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth()) {
         Row(Modifier.weight(1.25f)) {
             Key("MISS", null, Palette.KeyLight, enabled) { onHit(DartHit.MISS) }
@@ -44,11 +44,14 @@ fun Keypad(canUndo: Boolean, enabled: Boolean, onHit: (DartHit) -> Unit, onUndo:
             }
         }
         Row(Modifier.weight(1.2f)) {
-            Box(Modifier.weight(0.3f).fillMaxSize().background(Palette.KeyLight).border(BorderStroke(0.5.dp, Palette.Ink.copy(alpha = 0.35f))).clickable(enabled = canUndo, onClick = onUndo), contentAlignment = Alignment.Center) {
+            Box(Modifier.weight(0.2f).fillMaxSize().background(Palette.KeyLight).border(BorderStroke(0.5.dp, Palette.Ink.copy(alpha = 0.35f))).clickable(enabled = canUndo, onClick = onUndo), contentAlignment = Alignment.Center) {
                 Icon(Icons.AutoMirrored.Filled.Undo, "Undo", tint = Palette.Ink.copy(alpha = if (canUndo) 1f else 0.3f))
             }
-            Box(Modifier.weight(0.7f).fillMaxSize().background(Palette.Amber).clickable(enabled = enabled, onClick = onNext), contentAlignment = Alignment.Center) {
-                Text("NEXT PLAYER", color = Palette.Ink, fontFamily = Condensed, fontSize = 30.sp)
+            Box(Modifier.weight(0.35f).fillMaxSize().background(Palette.KeyMid).border(BorderStroke(0.5.dp, Palette.Ink.copy(alpha = 0.35f))).clickable(onClick = onPrevious), contentAlignment = Alignment.Center) {
+                Text("\u2039 PREV", color = Palette.Ink, fontFamily = Condensed, fontSize = 24.sp)
+            }
+            Box(Modifier.weight(0.45f).fillMaxSize().background(Palette.Amber).clickable(enabled = enabled, onClick = onNext), contentAlignment = Alignment.Center) {
+                Text("NEXT \u203A", color = Palette.Ink, fontFamily = Condensed, fontSize = 26.sp)
             }
         }
     }

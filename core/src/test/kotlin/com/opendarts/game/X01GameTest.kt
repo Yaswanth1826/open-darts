@@ -154,4 +154,66 @@ class X01GameTest {
         g.throwDart(DartHit.double(20))
         assertEquals(Outcome.IGNORED, g.throwDart(DartHit.single(1)))
     }
+
+    @Test fun editingADartReplaysTheTurn() {
+        val g = X01Game(two, X01Config(501))
+        g.throwDart(DartHit.treble(20)); g.throwDart(DartHit.single(5)); g.throwDart(DartHit.MISS)
+        assertTrue(g.editDart(1, DartHit.double(10)))
+        assertEquals(listOf(DartHit.treble(20), DartHit.double(10), DartHit.MISS), g.turnHits)
+        assertEquals(501 - 80, g.remaining(0))
+        assertTrue(g.turnOver)
+        assertEquals(0, g.currentPlayerIndex)
+    }
+
+    @Test fun deletingADartLeavesTheTurnOpen() {
+        val g = X01Game(two, X01Config(501))
+        repeat(3) { g.throwDart(DartHit.treble(20)) }
+        assertTrue(g.editDart(2, null))
+        assertEquals(2, g.turnHits.size)
+        assertEquals(501 - 120, g.remaining(0))
+        assertFalse(g.turnOver)
+        g.throwDart(DartHit.single(1))
+        assertEquals(501 - 121, g.remaining(0))
+    }
+
+    @Test fun editingADartThatWinsDropsTheDartsAfterIt() {
+        val g = X01Game(two, X01Config(40))
+        g.throwDart(DartHit.single(1)); g.throwDart(DartHit.single(1)); g.throwDart(DartHit.single(1))
+        assertTrue(g.editDart(0, DartHit.double(20)))
+        assertEquals(listOf(DartHit.double(20)), g.turnHits)
+        assertTrue(g.isFinished)
+    }
+
+    @Test fun previousPlayerReturnsToTheirTurnAndKeepsTheirDarts() {
+        val g = X01Game(two, X01Config(501))
+        repeat(3) { g.throwDart(DartHit.single(20)) }
+        g.endTurn()
+        g.throwDart(DartHit.single(1))
+        assertEquals(1, g.currentPlayerIndex)
+        assertTrue(g.previousPlayer())
+        assertEquals(0, g.currentPlayerIndex)
+        assertEquals(3, g.turnHits.size)
+        assertEquals(441, g.remaining(0))
+        assertEquals(501, g.remaining(1))
+        assertTrue(g.editDart(0, DartHit.treble(20)))
+        assertEquals(501 - 100, g.remaining(0))
+        g.endTurn()
+        assertEquals(1, g.currentPlayerIndex)
+    }
+
+    @Test fun previousPlayerDoesNothingAtTheStart() {
+        val g = X01Game(two, X01Config(501))
+        g.throwDart(DartHit.single(20))
+        assertFalse(g.previousPlayer())
+        assertEquals(1, g.turnHits.size)
+    }
+
+    @Test fun editingARoundBackIsPossibleAfterTheLegWasWon() {
+        val g = X01Game(two, X01Config(40))
+        g.throwDart(DartHit.double(20))
+        assertTrue(g.isFinished)
+        assertTrue(g.editDart(0, DartHit.single(20)))
+        assertFalse(g.isFinished)
+        assertEquals(20, g.remaining(0))
+    }
 }

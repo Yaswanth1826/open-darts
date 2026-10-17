@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -41,6 +42,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,10 +75,11 @@ fun GameScreen(session: GameSession, onExit: () -> Unit, onCalibrate: () -> Unit
 
 @Composable
 private fun ManualGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit) {
+    var editing by remember { mutableStateOf<Int?>(null) }
     Column(Modifier.fillMaxSize().background(Palette.KeyLight).systemBarsPadding()) {
-        GameTopBar(session, game, onExit, onNextPlayer = null)
+        GameTopBar(session, game, onExit, onPrevious = null, onNextPlayer = null)
         Column(Modifier.fillMaxWidth().background(Color(0xFFE2E2E2)).padding(bottom = 2.dp)) {
-            DartSlots(game, Color(0xFF7A7A7A))
+            DartSlots(game, Color(0xFF7A7A7A), onSlot = { editing = it })
             Text(
                 session.message, color = Palette.Ink.copy(alpha = 0.7f), fontFamily = CondensedRegular, fontSize = 14.sp, maxLines = 1,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -85,10 +88,11 @@ private fun ManualGame(session: GameSession, game: DartGame<*>, onExit: () -> Un
         PlayerTabs(game, roomy = true)
         Keypad(
             canUndo = game.canUndo, enabled = !game.isFinished,
-            onHit = { session.throwDart(it) }, onUndo = { session.undo() }, onNext = { session.nextPlayer() },
+            onHit = { session.throwDart(it) }, onUndo = { session.undo() }, onPrevious = { session.previousPlayer() }, onNext = { session.nextPlayer() },
             modifier = Modifier.weight(1f),
         )
     }
+    editing?.let { slot -> DartEditor(slot, game.turnHits.getOrNull(slot), onPick = { session.editDart(slot, it) }, onDismiss = { editing = null }) }
 }
 
 /**
@@ -100,6 +104,7 @@ fun GameTopBar(
     session: GameSession,
     game: DartGame<*>,
     onExit: () -> Unit,
+    onPrevious: (() -> Unit)?,
     onNextPlayer: (() -> Unit)?,
     extraMenu: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit = {},
 ) {
@@ -122,15 +127,14 @@ fun GameTopBar(
         val leg = (game as? X01Game)?.let { if (it.config.legsToWin > 1 || it.config.setsToWin > 1) ", LEG ${it.gameState.legsPlayed + 1}" else "" }.orEmpty()
         Text(
             buildAnnotatedString {
-                withStyle(SpanStyle(color = Palette.Ink, fontSize = 30.sp)) { append(session.setup.title.uppercase()) }
-                withStyle(SpanStyle(color = Palette.Ink.copy(alpha = 0.5f), fontSize = 18.sp)) { append("  R${game.round}$leg") }
+                withStyle(SpanStyle(color = Palette.Ink, fontSize = if (onNextPlayer != null) 22.sp else 30.sp)) { append(session.setup.title.uppercase()) }
+                if (onNextPlayer == null) withStyle(SpanStyle(color = Palette.Ink.copy(alpha = 0.5f), fontSize = 18.sp)) { append("  R${game.round}$leg") }
             },
-            fontFamily = Condensed, maxLines = 1, modifier = Modifier.weight(1f),
+            fontFamily = Condensed, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
         )
         if (onNextPlayer != null) {
-            Box(Modifier.clip(RoundedCornerShape(12.dp)).background(Palette.Sand).clickable(enabled = !game.isFinished, onClick = onNextPlayer).padding(horizontal = 14.dp, vertical = 10.dp)) {
-                Text("NEXT PLAYER", color = Palette.Ink, fontFamily = Condensed, fontSize = 18.sp)
-            }
+            if (onPrevious != null) PlayerButton("\u2039 PREV", onPrevious)
+            PlayerButton("NEXT \u203A", onNextPlayer, enabled = !game.isFinished)
         } else {
             SquareButton(onClick = { board = true }) { Icon(Icons.AutoMirrored.Filled.List, "Scoreboard", tint = Palette.Ink) }
         }
@@ -143,6 +147,16 @@ fun GameTopBar(
                 androidx.compose.foundation.layout.Spacer(Modifier.size(24.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun PlayerButton(label: String, onClick: () -> Unit, enabled: Boolean = true) {
+    Box(
+        Modifier.height(46.dp).clip(RoundedCornerShape(12.dp)).background(Palette.Sand).clickable(enabled = enabled, onClick = onClick).padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = Palette.Ink.copy(alpha = if (enabled) 1f else 0.4f), fontFamily = Condensed, fontSize = 19.sp, maxLines = 1)
     }
 }
 

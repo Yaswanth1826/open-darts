@@ -52,6 +52,7 @@ class ScoringCamera(
 ) {
     private val mlTracker = net?.let { MlDartTracker(TwoPassDetector(it)::detect) }
     @Volatile private var mlActive = net != null
+    @Volatile private var released = false
     private var lastLook = 0L
     private var missedLooks = 0
 
@@ -138,7 +139,17 @@ class ScoringCamera(
         install(Homography.fromFourPoints(src, dst), w, h)
     }
 
+    /** Frames arrive on the analyzer thread; one bad frame or a late frame after [release] must never crash the app. */
     fun onFrame(camera: CameraFrame) {
+        if (released) return
+        try {
+            handle(camera)
+        } catch (e: Exception) {
+            if (!released) android.util.Log.w("ScoringCamera", "frame skipped", e)
+        }
+    }
+
+    private fun handle(camera: CameraFrame) {
         lastFrame = camera
         if (mlActive && mlTracker != null) { look(camera, mlTracker); return }
         val frame = camera.gray
@@ -245,6 +256,7 @@ class ScoringCamera(
     }
 
     fun release() {
+        released = true
         detector.shutdown()
         (net as? AutoCloseable)?.close()
         capture?.release()
