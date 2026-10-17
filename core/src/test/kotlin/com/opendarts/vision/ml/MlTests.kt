@@ -144,8 +144,11 @@ class TwoPassDetectorTest {
     @Test
     fun fallsBackToTheWholeFrameWhenTheHintIsWrong() {
         val hint = corners.map { Point(it.x * 0.5, it.y * 0.5) }
-        val result = TwoPassDetector(net).detect(sideFrame(), hint)
-        assertEquals(3, runs)
+        val detector = TwoPassDetector(net)
+        detector.detect(sideFrame(), hint)
+        assertEquals(1, runs)
+        val result = detector.detect(sideFrame(), hint)
+        assertEquals(4, runs)
         assertTrue(result.calibration != null)
     }
 
@@ -318,6 +321,42 @@ class MlDartTrackerTest {
             assertTrue(landed(tracker.process(handAt(step % 4))).isEmpty())
         }
         assertEquals(0, tracker.darts)
+    }
+
+    /** The plain scene with a bright patch where a dart has landed. */
+    private fun sceneWithDartAt(pixel: Point): ColorFrame {
+        val rgb = ByteArray(640 * 480 * 3)
+        for (y in pixel.y.toInt() - 12 until pixel.y.toInt() + 12) for (x in pixel.x.toInt() - 12 until pixel.x.toInt() + 12) {
+            val i = (y * 640 + x) * 3
+            rgb[i] = -1; rgb[i + 1] = -1; rgb[i + 2] = -1
+        }
+        return ColorFrame(640, 480, rgb)
+    }
+
+    @Test
+    fun aDartThatVisiblyChangedThePictureIsScoredFromASingleLook() {
+        val hit = DartHit(20, Multiplier.TRIPLE)
+        repeat(3) { tracker.process(handAt(null)) }
+        visible = listOf(pixelOf(hit))
+        assertEquals(hit, landed(tracker.process(sceneWithDartAt(pixelOf(hit)))).single().hit)
+    }
+
+    @Test
+    fun aMarkWhereNothingChangedNeedsTwoLooks() {
+        val hit = DartHit(20, Multiplier.TRIPLE)
+        repeat(3) { tracker.process(handAt(null)) }
+        visible = listOf(pixelOf(hit))
+        assertTrue(landed(tracker.process(handAt(null))).isEmpty())
+        assertEquals(hit, landed(tracker.process(handAt(null))).single().hit)
+    }
+
+    @Test
+    fun aChangeOnlyCountsWhenTheCameraIsSteady() {
+        val hit = DartHit(20, Multiplier.TRIPLE)
+        repeat(3) { tracker.process(handAt(null)) }
+        moveCamera(45.0, 30.0, emptyList())
+        visible = listOf(pixelOf(hit))
+        assertTrue(landed(tracker.process(sceneWithDartAt(pixelOf(hit)))).isEmpty())
     }
 
     @Test

@@ -32,16 +32,7 @@ class SceneMotion(
     fun moved(frame: ColorFrame, nowMillis: Long = ticks++ * 450): Boolean {
         val c = frame.width / block
         val r = frame.height / block
-        val now = IntArray(c * r)
-        val sample = block / 2
-        for (by in 0 until r) for (bx in 0 until c) {
-            var sum = 0
-            for (dy in 0 until block step 2) for (dx in 0 until block step 2) {
-                val i = ((by * block + dy) * frame.width + bx * block + dx) * 3
-                sum += (frame.rgb[i].toInt() and 0xFF) + (frame.rgb[i + 1].toInt() and 0xFF) + (frame.rgb[i + 2].toInt() and 0xFF)
-            }
-            now[by * c + bx] = sum / (3 * sample * sample)
-        }
+        val now = blockAverages(frame, block)
         if (c != columns || r != rows) history.clear()
         columns = c
         rows = r

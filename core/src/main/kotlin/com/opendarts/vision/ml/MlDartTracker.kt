@@ -33,6 +33,8 @@ data class MlTrackerConfig(
     val handChangeShare: Double = 0.05,
     /** Darts are only taken as pulled out after the scene has been still for this many looks, so a hand reaching in cannot pass the turn. */
     val calmLooksToRemove: Int = 3,
+    /** A new dart that has visibly changed the picture around its tip (compared with the calm picture from before) counts after this many looks. */
+    val confirmLooksWithChange: Int = 1,
 )
 
 /**
@@ -58,6 +60,7 @@ class MlDartTracker(
     private val scene = SceneMotion(config.handChangeShare)
     private var calmLooks = 0
     private var looks = 0L
+    private val reference = ChangeReference()
 
     var state = TrackerState.WAITING_FOR_BOARD
         private set
@@ -81,6 +84,7 @@ class MlDartTracker(
     fun markBoardEmpty() {
         known.clear()
         candidates.clear()
+        reference.clear()
     }
 
     /**
@@ -136,6 +140,9 @@ class MlDartTracker(
         }
 
         val needed = if (handInWay) config.confirmLooksWithHand else config.confirmLooks
+        val steady = !handInWay && !settling && graceLooks == 0 && off <= config.trustRawFraction
+        val change = if (steady && unmatched.isNotEmpty()) reference.compare(frame) else null
+        fun fresh(pixel: Point) = change != null && change.around(pixel)
         val next = ArrayList<Candidate>()
         val confirmed = ArrayList<Candidate>()
         for ((board, pixel) in unmatched) {
@@ -145,9 +152,10 @@ class MlDartTracker(
                 candidate.board = board
                 candidate.pixel = pixel
                 candidate.seen++
-                if (candidate.seen >= needed) confirmed += candidate else next += candidate
+                if (candidate.seen >= needed || (candidate.seen >= config.confirmLooksWithChange && fresh(pixel))) confirmed += candidate else next += candidate
             } else {
-                next += Candidate(board, pixel, looks)
+                val dart = Candidate(board, pixel, looks)
+                if (config.confirmLooksWithChange <= 1 && fresh(pixel)) confirmed += dart else next += dart
             }
         }
         // A hand can hide a dart for a look; do not forget it was seen.
@@ -160,6 +168,7 @@ class MlDartTracker(
         }
 
         if (removed > 0) events += TrackerEvent.DartsRemoved(known.size)
+        if (steady && candidates.isEmpty() && calmLooks >= 2) reference.capture(frame)
         return events
     }
 
@@ -179,6 +188,7 @@ class MlDartTracker(
             val jump = cal.indices.maxOf { dist(cal[it], previous[it]) } / diagonal
             if (jump > config.jumpFraction) {
                 settling = true
+                reference.clear()
                 if (++jumps >= config.jumpLooksToReset) {
                     jumps = 0
                     settling = false

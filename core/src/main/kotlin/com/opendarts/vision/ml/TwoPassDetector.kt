@@ -38,12 +38,17 @@ class TwoPassDetector(
         Point(net.inputSize * (0.5 + FLAT_SCALE * it.x), net.inputSize * (0.5 - FLAT_SCALE * it.y))
     }
 
+    private var hintMisses = 0
+
     /** [hint] is where the corners were last time, if known. */
     fun detect(frame: ColorFrame, hint: List<Point>? = null): FrameDetections {
         if (hint != null) {
             val again = flattened(frame, hint)
-            if (again != null && again.found >= 3) return again
+            if (again != null && again.found >= 3) { hintMisses = 0; return again }
+            // A single bad look (a hand over a corner) is not worth two more network runs; the tracker holds the last board.
+            if (again != null && ++hintMisses < HINT_MISSES_BEFORE_SEARCH) return again
         }
+        hintMisses = 0
 
         val whole = look(frame)
         val rough = completeCorners(whole.corners) ?: return whole
@@ -76,6 +81,7 @@ class TwoPassDetector(
 
     companion object {
         /** The flattened training images show the 170 mm outer edge of the board at 0.37628 of their size. */
+        const val HINT_MISSES_BEFORE_SEARCH = 2
         const val FLAT_SCALE = 0.37628 / BoardGeometry.DOUBLE_OUTER_RADIUS
     }
 }
