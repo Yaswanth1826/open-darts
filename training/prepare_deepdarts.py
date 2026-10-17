@@ -101,6 +101,7 @@ def main():
     parser.add_argument("--datasets", nargs="+", default=["d1", "d2"], help="which DeepDarts sets to use")
     parser.add_argument("--extra", nargs="*", default=[], help="extra YOLO-format folders (images/ and labels/)")
     parser.add_argument("--extra-repeat", type=int, default=1, help="how many times each extra picture is added, so a few hundred of your own photos are not drowned by the 37000 others")
+    parser.add_argument("--extra-holdout", type=float, default=0.1, help="share of your own photos kept out of training (half for val, half for test) to measure how the model does on them")
     parser.add_argument("--oblique", type=int, default=0, help="side-view copies of every training picture")
     args = parser.parse_args()
     rng = np.random.RandomState(0)
@@ -139,11 +140,20 @@ def main():
                     f.write("\n".join(made[1]) + "\n")
                 counts[split] += 1
 
+    period = max(2, round(1 / args.extra_holdout)) if args.extra_holdout > 0 else 0
     for extra in args.extra:
-        for name in os.listdir(os.path.join(extra, "images")):
+        photos = sorted({os.path.splitext(n)[0].rsplit("_", 1)[0] for n in os.listdir(os.path.join(extra, "images"))})
+        for name in sorted(os.listdir(os.path.join(extra, "images"))):
             stem, ext = os.path.splitext(name)
             label = os.path.join(extra, "labels", stem + ".txt")
             if not os.path.exists(label):
+                continue
+            n = photos.index(stem.rsplit("_", 1)[0])
+            if period and n % period == 0:
+                split = "val" if (n // period) % 2 == 0 else "test"
+                link(os.path.join(extra, "images", name), os.path.join(args.out, "images", split, f"extra_{stem}{ext}"))
+                shutil.copy(label, os.path.join(args.out, "labels", split, f"extra_{stem}.txt"))
+                counts[split] += 1
                 continue
             for k in range(args.extra_repeat):
                 link(os.path.join(extra, "images", name), os.path.join(args.out, "images", "train", f"extra{k}_{stem}{ext}"))

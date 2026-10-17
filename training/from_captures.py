@@ -1,23 +1,23 @@
-"""Turns the photos collected by the app ("Collect training photos" in the camera menu, then "Share training photos")
-into YOLO training data, so the network can learn from your own board, phone and room.
+"""Turns the photos collected by the app ("Collect training photos" in the camera menu) into YOLO training data, so
+the network can learn from your own board, phone and room.
 
-Each sample in the zip is <stamp>.jpg plus <stamp>.json (the four calibration points and the darts the network found, in
-pixels). The labels are the network's own detections, so only photos it read correctly are good teachers: samples where
-you corrected a dart in the app have a <stamp>.flag file and are NOT used; they are copied with the detections drawn on
-to --review so you can fix the labels by hand (or just leave them out).
+The app stores them in Pictures/OpenDarts/Training on the phone. Copy that folder to the PC (USB, or share them from
+the Gallery). Each JPEG carries, as a comment, the four calibration points and the darts the network found, in pixels.
+The network's own detections are wrong exactly where it fails, so look at every photo first with label_photos.py,
+which pre-fills the detections and lets you click the dart tips right. It saves <photo>.labels.json next to each photo.
+Only photos that have been looked at are used (pass --trust-model to also use the unchecked ones as they are).
 
 The app looks at the board twice: once at the whole frame and again after flattening the board square-on with the
 corners it found. Every photo therefore becomes one whole-frame sample and --flat slightly different flattened ones.
 
-    python from_captures.py open-darts-training.zip --out my_photos
+    python label_photos.py Training
+    python from_captures.py Training --out my_photos
     python prepare_deepdarts.py --dataset-dir dataset --out yolo_darts --oblique 2 --extra my_photos --extra-repeat 20
 """
 import argparse
 import json
 import math
 import os
-import shutil
-import zipfile
 
 import cv2
 import numpy as np
@@ -27,6 +27,40 @@ BOX = 0.025
 PAD = 114
 FLAT_SCALE = 0.37628  # share of the flattened image taken by the 170 mm board edge, as in TwoPassDetector
 CORNER_ANGLES = [351.0, 171.0, 261.0, 81.0]  # wires of cal1..cal4, degrees clockwise from the 20
+
+
+def read_comment(path):
+    """The text of the first JPEG comment segment (what the app stores its detections in), or None."""
+    with open(path, "rb") as f:
+        data = f.read()
+    if data[:2] != b"\xff\xd8":
+        return None
+    i = 2
+    while i + 4 <= len(data) and data[i] == 0xFF:
+        marker = data[i + 1]
+        if marker == 0xDA or marker == 0xD9:
+            break
+        length = (data[i + 2] << 8) | data[i + 3]
+        if marker == 0xFE:
+            return data[i + 4:i + 2 + length].decode("utf-8", "replace")
+        i += 2 + length
+    return None
+
+
+def load_meta(path):
+    """What the app found in a photo: {"corners": [[x, y] * 4], "darts": [[x, y], ...], "note": str}, or None."""
+    text = read_comment(path)
+    if not text:
+        return None
+    try:
+        meta = json.loads(text)
+        return meta if "corners" in meta and "darts" in meta else None
+    except ValueError:
+        return None
+
+
+def labels_path(photo):
+    return os.path.splitext(photo)[0] + ".labels.json"
 
 
 def flat_corners():
@@ -68,49 +102,44 @@ def flattened(img, corners, darts, rng, jitter):
     return flat, label_lines(target.tolist(), pts(darts))
 
 
-def overlay(img, corners, darts):
-    out = img.copy()
-    for x, y in corners:
-        cv2.circle(out, (int(x), int(y)), 8, (0, 230, 118), 2)
-    for x, y in darts:
-        cv2.circle(out, (int(x), int(y)), 10, (0, 0, 255), 2)
-    return out
+def photos_in(folder):
+    for root, _, names in os.walk(folder):
+        for name in sorted(names):
+            if name.lower().endswith((".jpg", ".jpeg")):
+                yield os.path.join(root, name)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("source", help="the shared zip, or the folder it was unpacked into")
+    parser.add_argument("source", help="folder with the photos from the phone (and their .labels.json files)")
     parser.add_argument("--out", default="my_photos", help="YOLO folder to create (images/ and labels/)")
-    parser.add_argument("--review", default=None, help="where to put the corrected (flagged) photos, default <out>_review")
     parser.add_argument("--flat", type=int, default=3, help="flattened copies per photo, each with slightly different corners")
+    parser.add_argument("--trust-model", action="store_true", help="also use photos that were not checked with label_photos.py")
     args = parser.parse_args()
     rng = np.random.RandomState(0)
 
-    source = args.source
-    if zipfile.is_zipfile(source):
-        folder = args.out + "_raw"
-        shutil.rmtree(folder, ignore_errors=True)
-        zipfile.ZipFile(source).extractall(folder)
-        source = folder
-    review = args.review or args.out + "_review"
     os.makedirs(os.path.join(args.out, "images"), exist_ok=True)
     os.makedirs(os.path.join(args.out, "labels"), exist_ok=True)
 
-    used = flagged = skipped = 0
-    for name in sorted(os.listdir(source)):
-        stem, ext = os.path.splitext(name)
-        if ext != ".json":
+    used = unchecked = excluded = skipped = 0
+    for photo in photos_in(args.source):
+        stem = os.path.splitext(os.path.basename(photo))[0]
+        meta = None
+        if os.path.exists(labels_path(photo)):
+            meta = json.load(open(labels_path(photo)))
+            if meta.get("skip"):
+                excluded += 1
+                continue
+        elif args.trust_model:
+            meta = load_meta(photo)
+        else:
+            unchecked += 1
             continue
-        img = cv2.imread(os.path.join(source, stem + ".jpg"))
-        if img is None:
+        img = cv2.imread(photo)
+        if img is None or meta is None or len(meta.get("corners", [])) != 4:
+            skipped += 1
             continue
-        meta = json.load(open(os.path.join(source, name)))
         corners, darts = meta["corners"], meta["darts"]
-        if os.path.exists(os.path.join(source, stem + ".flag")):
-            os.makedirs(review, exist_ok=True)
-            cv2.imwrite(os.path.join(review, stem + ".jpg"), overlay(img, corners, darts))
-            flagged += 1
-            continue
         samples = [(f"{stem}_whole", whole_frame(img, corners, darts))]
         samples += [(f"{stem}_flat{k}", flattened(img, corners, darts, rng, 0.0 if k == 0 else 0.012)) for k in range(args.flat)]
         for sample_name, (image, lines) in samples:
@@ -121,7 +150,8 @@ def main():
             with open(os.path.join(args.out, "labels", sample_name + ".txt"), "w") as f:
                 f.write("\n".join(lines) + "\n")
             used += 1
-    print(f"{used} training pictures written to {args.out}; {flagged} corrected photos set aside in {review}; {skipped} skipped (a corner cut off)")
+    print(f"{used} training pictures written to {args.out}; {unchecked} photos not checked yet (run label_photos.py), "
+          f"{excluded} left out on purpose, {skipped} unusable (a corner cut off)")
 
 
 if __name__ == "__main__":

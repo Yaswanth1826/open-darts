@@ -38,6 +38,8 @@ data class CameraStatus(
     val handInWay: Boolean = false,
     /** Training photos stored on the phone. */
     val collected: Int = 0,
+    /** How long the last look took, in milliseconds (shown with the board outline). */
+    val lookMs: Long = 0,
 )
 
 /**
@@ -78,13 +80,15 @@ class ScoringCamera(
     @Volatile private var lastFrame: CameraFrame? = null
     @Volatile private var lastColor: com.opendarts.vision.ml.ColorFrame? = null
 
-    /** Keeps a labelled photo of every dart (and of the emptied board) to retrain the network on real pictures. */
-    @Volatile var collecting = false
+    /** Keeps labelled photos of the board (at every dart, when it empties, and every few seconds) to retrain the network on real pictures. */
+    var collecting: Boolean
+        get() = collector?.enabled == true
+        set(value) { collector?.enabled = value }
     @Volatile private var collected = collector?.count() ?: 0
+    private var lastSample = 0L
 
-    /** The player corrected a dart, so the latest photo's labels need a second look before training. */
-    fun flagLatestPhoto() {
-        if (collecting) collector?.flagLatest()
+    fun deleteCollected(onDone: () -> Unit) {
+        collector?.clear { collected = 0; lastStatus?.let { publish(it.copy(collected = 0)) }; main.post(onDone) }
     }
 
     /** Saves the latest frame now (for example when a dart was misread). */
@@ -210,6 +214,7 @@ class ScoringCamera(
         startRequested.set(false)
         while (true) tracker.releaseAt(releases.poll() ?: break)
         val events = tracker.process(colour)
+        val lookMs = System.currentTimeMillis() - now
         val ready = tracker.state == com.opendarts.vision.TrackerState.READY
         missedLooks = if (ready) 0 else missedLooks + 1
         val phase = when {
@@ -217,20 +222,23 @@ class ScoringCamera(
             missedLooks >= NOT_FOUND_LOOKS -> CameraPhase.NOT_FOUND
             else -> CameraPhase.FINDING_BOARD
         }
-        publish(CameraStatus(phase, tracker.state, tracker.darts, tracker.boardToPixel, colour.width, colour.height, usingAi = true, view = tracker.view.takeIf { ready }, handInWay = tracker.handInWay, collected = collected))
+        publish(CameraStatus(phase, tracker.state, tracker.darts, tracker.boardToPixel, colour.width, colour.height, usingAi = true, view = tracker.view.takeIf { ready }, handInWay = tracker.handInWay, collected = collected, lookMs = lookMs))
         events.forEach { event ->
             if (collecting) collect(event, colour, tracker)
             main.post { onEvent(event) }
         }
+        if (collecting && ready && !tracker.handInWay && now - lastSample >= SAMPLE_MS) collect(null, colour, tracker)
     }
 
-    private fun collect(event: TrackerEvent, colour: com.opendarts.vision.ml.ColorFrame, tracker: MlDartTracker) {
+    private fun collect(event: TrackerEvent?, colour: com.opendarts.vision.ml.ColorFrame, tracker: MlDartTracker) {
         val corners = tracker.cornerPixels ?: return
         val note = when {
+            event == null -> "sample"
             event is TrackerEvent.DartLanded -> "dart-${event.hit.multiplier.name}-${event.hit.base}"
             event is TrackerEvent.DartsRemoved && event.remaining == 0 -> "empty"
             else -> return
         }
+        lastSample = System.currentTimeMillis()
         collector?.save(colour, corners, tracker.dartPixels, note) { n ->
             if (n >= 0) {
                 collected = n
@@ -295,6 +303,7 @@ class ScoringCamera(
         const val AGREEMENT = 0.012
         const val NOT_FOUND_AFTER = 6
         const val LOOK_INTERVAL_MS = 450L
+        const val SAMPLE_MS = 6000L
         const val NOT_FOUND_LOOKS = 8
     }
 }

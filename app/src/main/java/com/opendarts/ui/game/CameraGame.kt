@@ -75,8 +75,8 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     var aligning by remember { mutableStateOf(false) }
     var tips by remember { mutableStateOf(false) }
     var outline by remember { mutableStateOf<Boolean?>(null) }
-    var collecting by remember { mutableStateOf(false) }
     val collector = remember { TrainingCollector(context) }
+    var collecting by remember { mutableStateOf(collector.enabled) }
     var saved by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<Int?>(null) }
     val showBoard = outline ?: !status.usingAi
@@ -137,9 +137,9 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
                 onClick = { dismiss(); collecting = !collecting; camera.collecting = collecting },
             )
             if (status.collected > 0) {
-                DropdownMenuItem(text = { Text("Share training photos") }, onClick = {
+                DropdownMenuItem(text = { Text("Delete training photos") }, onClick = {
                     dismiss()
-                    Thread { collector.shareIntent()?.let { intent -> android.os.Handler(android.os.Looper.getMainLooper()).post { context.startActivity(intent) } } }.start()
+                    camera.deleteCollected { saved = "Training photos deleted" }
                 })
             }
             DropdownMenuItem(text = { Text("Setup tips") }, onClick = { dismiss(); tips = true })
@@ -158,8 +158,8 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     editing?.let { slot ->
         DartEditor(
             slot, game.turnHits.getOrNull(slot), front = game.turnHits.take(slot), canLookBehind = session.canLookBehind(slot),
-            onPick = { camera.flagLatestPhoto(); session.editDart(slot, it) }, onBehind = { session.dartBehind(slot, it) },
-            onLookBehind = { camera.flagLatestPhoto(); session.editDart(slot, null, lookBehind = true)?.let(camera::releaseSpot) }, onDismiss = { editing = null },
+            onPick = { session.editDart(slot, it) }, onBehind = { session.dartBehind(slot, it) },
+            onLookBehind = { session.editDart(slot, null, lookBehind = true)?.let(camera::releaseSpot) }, onDismiss = { editing = null },
         )
     }
     saved?.let { msg ->
@@ -189,7 +189,7 @@ private fun CameraArea(
                     when {
                         aligning -> AlignCard(onLock, onCancelAlign)
                         !finished && status.phase != CameraPhase.TRACKING -> FindingCard(status.phase == CameraPhase.NOT_FOUND, camera, onAlign, onCalibrate, onTips)
-                        else -> StatusPill(status, message, Modifier.align(Alignment.CenterHorizontally))
+                        else -> StatusPill(status, message, showBoard, Modifier.align(Alignment.CenterHorizontally))
                     }
                 }
                 Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.Bottom) {
@@ -216,7 +216,7 @@ private fun OverlayButton(enabled: Boolean = true, onClick: () -> Unit, content:
 }
 
 @Composable
-private fun StatusPill(status: CameraStatus, message: String, modifier: Modifier) {
+private fun StatusPill(status: CameraStatus, message: String, debug: Boolean, modifier: Modifier) {
     val text = when (status.phase) {
         CameraPhase.TRACKING -> if (status.handInWay) "Hand in the way \u2013 waiting" else when (status.tracker) {
             TrackerState.WAITING_FOR_BOARD -> "Scanning the empty board \u2013 keep hands clear"
@@ -225,7 +225,7 @@ private fun StatusPill(status: CameraStatus, message: String, modifier: Modifier
             TrackerState.READY -> coaching(status.view) ?: (message + (if (status.darts > 0) "  \u00B7  ${status.darts} on board" else ""))
         }
         else -> message
-    }
+    } + if (debug && status.usingAi && status.lookMs > 0) "  \u00B7  ${status.lookMs} ms" else ""
     Box(modifier.clip(RoundedCornerShape(50)).background(Color(0xB3000000)).padding(horizontal = 16.dp, vertical = 6.dp)) {
         Text(text, color = Color.White, fontFamily = Condensed, fontSize = 17.sp, textAlign = TextAlign.Center, maxLines = 1)
     }
