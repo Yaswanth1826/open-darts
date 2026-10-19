@@ -211,21 +211,34 @@ def download(target, bucket, max_groups):
     def fetch(name):
         path = os.path.join(target, *name.split("/"))
         if os.path.exists(path):
-            return
+            return True
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        for attempt in range(4):
+        for attempt in range(8):
             try:
                 urllib.request.urlretrieve(f"https://huggingface.co/buckets/{bucket}/resolve/{name}", path + ".part")
                 os.replace(path + ".part", path)
-                return
+                return True
             except OSError:
-                time.sleep(2 * (attempt + 1))
-        print("could not download", name, flush=True)
+                time.sleep(min(60, 3 * 2 ** attempt))  # the server slows down when asked too often: back off
+        return False
 
-    with concurrent.futures.ThreadPoolExecutor(16) as pool:
-        for n, _ in enumerate(pool.map(fetch, wanted)):
-            if n % 500 == 0:
-                print(f"{n}/{len(wanted)}", flush=True)
+    todo = wanted
+    for attempt in range(3):
+        with concurrent.futures.ThreadPoolExecutor(8) as pool:
+            results = []
+            for n, ok in enumerate(pool.map(fetch, todo)):
+                results.append(ok)
+                if n % 500 == 0:
+                    print(f"{n}/{len(todo)}", flush=True)
+        todo = [name for name, ok in zip(todo, results) if not ok]
+        if not todo:
+            break
+        print(f"{len(todo)} files failed; waiting a minute and trying them again", flush=True)
+        time.sleep(60)
+    if todo:
+        print(f"{len(todo)} files could not be downloaded (run the same command again to fetch them; the rest is kept)", flush=True)
+    else:
+        print("all files downloaded", flush=True)
 
 
 def main():
