@@ -25,12 +25,13 @@ def main():
     parser.add_argument("--lr0", type=float, default=None, help="starting learning rate; use about 0.002 when fine-tuning")
     parser.add_argument("--out", default="dartnet.tflite")
     parser.add_argument("--project", default="runs")
+    parser.add_argument("--resume", default=None, help="continue an interrupted run from its weights/last.pt (all other settings are taken from that run)")
     args = parser.parse_args()
 
-    model = YOLO(args.model)
+    model = YOLO(args.resume or args.model)
     extra = {"lr0": args.lr0, "warmup_epochs": 1} if args.lr0 else {}
     model.train(
-        data=args.data, epochs=args.epochs, imgsz=args.imgsz, batch=args.batch, project=args.project, name="dartnet",
+        resume=bool(args.resume), data=args.data, epochs=args.epochs, imgsz=args.imgsz, batch=args.batch, project=args.project, name="dartnet",
         exist_ok=True, patience=20,
         fliplr=0.0, flipud=0.0, mosaic=0.0, mixup=0.0, copy_paste=0.0,
         degrees=4.0, translate=0.08, scale=0.35, perspective=0.0004, shear=2.0,
