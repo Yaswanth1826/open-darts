@@ -7,7 +7,7 @@ clicking: a homography is fitted from the 81 crossings to the board in millimetr
 crossings of the double ring's outer wire at the 5|20, 17|3, 8|11 and 13|6 wires, and each dart tip is its board position
 carried through the same homography.
 
-    python prepare_dartscribe.py --download dartscribe          (once; needs: pip install huggingface_hub pyyaml)
+    python prepare_dartscribe.py --download dartscribe          (once, about 2 GB; needs: pip install pyyaml)
     python prepare_deepdarts.py --dataset-dir dataset --out yolo_darts --oblique 2
     python prepare_dartscribe.py --dataset-dir dartscribe --out yolo_darts
 
@@ -26,6 +26,7 @@ import concurrent.futures
 import math
 import os
 import shutil
+import socket
 import time
 import urllib.request
 
@@ -34,7 +35,7 @@ import numpy as np
 
 from from_captures import CORNER_ANGLES, SIZE, flattened, whole_frame
 
-REPO = "geforcefan/dartscribe"
+BUCKET = "YaswanthNimmala/dartscribe-bucket"  # a copy of https://huggingface.co/datasets/geforcefan/dartscribe
 SECTORS = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5]
 IGNORE_BEYOND_MM = 176.0  # the app ignores marks this far from the bull
 
@@ -157,21 +158,32 @@ def load_yaml(path):
         return yaml.safe_load(f)
 
 
-def download(target, max_groups):
-    from huggingface_hub import HfApi
-    files = HfApi().list_repo_files(REPO, repo_type="dataset")
-    groups = {}
-    wanted = []
-    for f in files:
+def listing(bucket):
+    """Every file of a public Hugging Face bucket (the listing is paged: each page links to the next one)."""
+    import json
+    import re
+    url = f"https://huggingface.co/api/buckets/{bucket}/tree?recursive=true&limit=1000&sort=path"
+    while url:
+        with urllib.request.urlopen(url, timeout=60) as response:
+            for entry in json.load(response):
+                if entry["type"] == "file":
+                    yield entry["path"]
+            link = re.search(r'<([^>]+)>;\s*rel="next"', response.headers.get("Link", ""))
+            url = link.group(1) if link else None
+
+
+def download(target, bucket, max_groups):
+    socket.setdefaulttimeout(60)  # a stalled connection must fail (and be retried), not hang the whole download
+    wanted, groups = [], {}
+    for f in listing(bucket):
         parts = f.split("/")
         if parts[0] == "boards" and len(parts) == 3:
             wanted.append(f)
-        elif parts[0] == "throws" and len(parts) == 4:
-            key = (parts[1], parts[2])
+        elif parts[0] == "throws" and len(parts) == 4 and "takeout" not in f:
             groups.setdefault(parts[1], {}).setdefault(parts[2], []).append(f)
-    for session, found in groups.items():
+    for found in groups.values():
         for group in sorted(found)[:max_groups or None]:
-            wanted += [f for f in found[group] if "takeout" not in f]
+            wanted += found[group]
     print(f"downloading {len(wanted)} files to {target}", flush=True)
 
     def fetch(name):
@@ -181,7 +193,7 @@ def download(target, max_groups):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         for attempt in range(4):
             try:
-                urllib.request.urlretrieve(f"https://huggingface.co/datasets/{REPO}/resolve/main/{name}", path + ".part")
+                urllib.request.urlretrieve(f"https://huggingface.co/buckets/{bucket}/resolve/{name}", path + ".part")
                 os.replace(path + ".part", path)
                 return
             except OSError:
@@ -190,7 +202,7 @@ def download(target, max_groups):
 
     with concurrent.futures.ThreadPoolExecutor(16) as pool:
         for n, _ in enumerate(pool.map(fetch, wanted)):
-            if n % 250 == 0:
+            if n % 500 == 0:
                 print(f"{n}/{len(wanted)}", flush=True)
 
 
@@ -198,6 +210,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset-dir", default="dartscribe", help="folder with boards/ and throws/ (see --download)")
     parser.add_argument("--download", metavar="DIR", help="fetch the dataset into DIR first (without the take-out frames) and stop")
+    parser.add_argument("--bucket", default=BUCKET, help="public Hugging Face bucket (or any bucket with the same folders) to download from")
     parser.add_argument("--max-groups", type=int, default=0, help="with --download: at most this many throw groups per session (0 = all)")
     parser.add_argument("--out", default="yolo_darts", help="YOLO folder to add to (the one prepare_deepdarts.py made)")
     parser.add_argument("--flat", type=int, default=2, help="flattened copies per photo (each with slightly different corners)")
@@ -206,7 +219,7 @@ def main():
     parser.add_argument("--no-boards", action="store_true", help="leave out the single photos of empty boards (boards/)")
     args = parser.parse_args()
     if args.download:
-        download(args.download, args.max_groups)
+        download(args.download, args.bucket, args.max_groups)
         return
 
     rng = np.random.RandomState(0)
