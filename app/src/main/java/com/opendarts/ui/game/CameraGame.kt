@@ -61,6 +61,7 @@ import com.opendarts.ui.camera.Guide
 import com.opendarts.ui.camera.GuideOverlay
 import com.opendarts.ui.camera.ScoringCamera
 import com.opendarts.ui.camera.TfliteDartNet
+import com.opendarts.ui.camera.TfliteTipNet
 import com.opendarts.ui.camera.TrainingCollector
 import com.opendarts.ui.common.SetupTipsDialog
 import com.opendarts.ui.theme.Condensed
@@ -104,6 +105,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
             onStatus = { status = it },
             capture = DebugCapture(context),
             net = TfliteDartNet.loadOrNull(context),
+            tipNet = TfliteTipNet.loadOrNull(context),
             collector = collector,
         ).also { if (session.manualCalibration) it.useManualCalibration() }
     }

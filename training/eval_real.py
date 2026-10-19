@@ -1,7 +1,7 @@
 """Measures how well the shipped model reads darts on your own photos, the way the app does.
 
     python label_photos.py Training                       (check the dart tips once)
-    python eval_real.py Training --model ../app/src/main/assets/dartnet.tflite
+    python eval_real.py Training --model ../app/src/main/assets/dartnet.tflite [--tips tiprefine.tflite]
 
 Uses the photos you checked with label_photos.py (<photo>.labels.json). For each photo it runs the same two passes as
 the app (whole frame to find the board, then the flattened board to find the darts), converts the darts to board
@@ -66,6 +66,47 @@ class Net:
         return picked
 
 
+class TipNet:
+    """The optional second stage (TipRefiner.kt): moves each dart mark onto the tip and drops marks that are no tip."""
+
+    PATCH = 96
+
+    def __init__(self, path, min_tip=0.4, rounds=2, merge=5.0):
+        try:
+            from ai_edge_litert.interpreter import Interpreter
+        except ImportError:
+            from tensorflow.lite.python.interpreter import Interpreter
+        self.it = Interpreter(model_path=path)
+        self.it.allocate_tensors()
+        self.inp = self.it.get_input_details()[0]
+        self.out = self.it.get_output_details()[0]
+        self.min_tip, self.rounds, self.merge = min_tip, rounds, merge
+
+    def run(self, flat, x, y):
+        m = np.float32([[1, 0, self.PATCH / 2 - x], [0, 1, self.PATCH / 2 - y]])
+        patch = cv2.warpAffine(flat, m, (self.PATCH, self.PATCH), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=(PAD, PAD, PAD))
+        self.it.set_tensor(self.inp["index"], patch[None].astype(np.float32) / 255.0)
+        self.it.invoke()
+        dx, dy, tip = self.it.get_tensor(self.out["index"])[0]
+        return float(dx), float(dy), float(tip)
+
+    def refine(self, flat, marks):
+        kept = []
+        for x, y in marks:
+            believed = False
+            for _ in range(self.rounds):
+                dx, dy, tip = self.run(flat, x, y)
+                if tip < self.min_tip:
+                    break
+                believed = True
+                x, y = x + dx, y + dy
+                if math.hypot(dx, dy) < 1.5:
+                    break
+            if believed and all(math.hypot(x - kx, y - ky) >= self.merge for kx, ky in kept):
+                kept.append((x, y))
+        return kept
+
+
 # ---- the app's two-pass detection -------------------------------------------------------------
 
 def letterbox(rgb):
@@ -78,13 +119,15 @@ def letterbox(rgb):
     return canvas, lambda x, y: ((x - ox) / scale, (y - oy) / scale)
 
 
-def read(found, to_frame):
+def read(found, to_frame, refine=None):
     corners = []
     for cls in range(1, 5):
         best = max((d for d in found if d[0] == cls and d[1] >= CAL_SCORE), key=lambda d: d[1], default=None)
         corners.append(to_frame(best[2], best[3]) if best else None)
-    darts = [to_frame(d[2], d[3]) for d in found if d[0] == 0 and d[1] >= DART_SCORE]
-    return corners, darts
+    marks = [(d[2], d[3]) for d in sorted(found, key=lambda d: -d[1]) if d[0] == 0 and d[1] >= DART_SCORE]
+    if refine:
+        marks = refine(marks)
+    return corners, [to_frame(x, y) for x, y in marks]
 
 
 def complete_corners(corners, previous=None):
@@ -104,18 +147,18 @@ def complete_corners(corners, previous=None):
     return [c if c is not None else guess for c in corners]
 
 
-def flattened(net, rgb, corners):
+def flattened(net, rgb, corners, tips=None):
     flat_to_frame = cv2.getPerspectiveTransform(flat_corners(), np.float32(corners))
     flat = cv2.warpPerspective(rgb, flat_to_frame, (SIZE, SIZE), flags=cv2.WARP_INVERSE_MAP | cv2.INTER_LINEAR, borderValue=(PAD, PAD, PAD))
     def to_frame(x, y):
         v = flat_to_frame @ np.array([x, y, 1.0])
         return (v[0] / v[2], v[1] / v[2])
-    return read(net.run(flat), to_frame)
+    return read(net.run(flat), to_frame, (lambda marks: tips.refine(flat, marks)) if tips else None)
 
 
-def detect(net, rgb, hint):
+def detect(net, rgb, hint, tips=None):
     if hint is not None:
-        corners, darts = flattened(net, rgb, hint)
+        corners, darts = flattened(net, rgb, hint, tips)
         if sum(c is not None for c in corners) >= 3:
             return corners, darts
     canvas, back = letterbox(rgb)
@@ -123,7 +166,7 @@ def detect(net, rgb, hint):
     rough = complete_corners(whole[0])
     if rough is None:
         return whole
-    refined = flattened(net, rgb, rough)
+    refined = flattened(net, rgb, rough, tips)
     return refined if sum(c is not None for c in refined[0]) >= 3 else whole
 
 
@@ -252,10 +295,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("folder", help="photos with .labels.json files from label_photos.py")
     parser.add_argument("--model", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "src", "main", "assets", "dartnet.tflite"))
+    parser.add_argument("--tips", default=None, help="also use the second-stage tip refiner (tiprefine.tflite), as the app does when the file is in its assets")
     parser.add_argument("--cold", action="store_true", help="read the board from scratch in every photo instead of starting from your labelled corners")
     parser.add_argument("--out", default=None, help="folder for pictures of the photos that went wrong")
     args = parser.parse_args()
     net = Net(args.model)
+    tips = TipNet(args.tips) if args.tips else None
     plain, filtered = Tally(), Tally()
     lost = 0
     for photo in photos_in(args.folder):
@@ -272,7 +317,7 @@ def main():
         truth_corners = [tuple(c) for c in label["corners"]]
         truth_mm = apply(to_mm_matrix(truth_corners), label["darts"])
 
-        corners, darts = detect(net, rgb, None if args.cold else truth_corners)
+        corners, darts = detect(net, rgb, None if args.cold else truth_corners, tips)
         fit_corners = complete_corners(corners, None if args.cold else truth_corners)
         if fit_corners is None:
             lost += 1

@@ -26,12 +26,13 @@ class FrameDetections(val corners: List<Point?>, val darts: List<Point>) {
  * it from the side. So the board is found in the raw frame first (coarse), then the frame is warped square-on
  * using those corners and the network runs again on the flat board, which gives precise corners and dart tips.
  * Once the board is known the first pass is skipped and the previous corners are used to flatten the next frame.
- * Results are mapped back to frame pixels.
+ * Results are mapped back to frame pixels. With a [tips] refiner the dart marks found on the flat board are moved onto the tips.
  */
 class TwoPassDetector(
     private val net: DartNet,
     private val dartScore: Float = 0.35f,
     private val calibrationScore: Float = 0.3f,
+    private val tips: TipRefiner? = null,
 ) {
     /** Corner positions (share of the image) of the flattened board, the layout the network was trained on. */
     private val flatCorners: List<Point> = BoardGeometry.MODEL_CALIBRATION_POINTS.map {
@@ -61,21 +62,25 @@ class TwoPassDetector(
         val cx = frame.width / 2.0
         val cy = frame.height / 2.0
         val found = net.run(frame.window(cx, cy, side, net.inputSize))
-        return read(found) { Point(cx - side / 2 + it.x * side, cy - side / 2 + it.y * side) }
+        return read(found, { Point(cx - side / 2 + it.x * side, cy - side / 2 + it.y * side) })
     }
 
     private fun flattened(frame: ColorFrame, corners: List<Point>): FrameDetections? {
         val flatToFrame = runCatching { Homography.fromFourPoints(flatCorners, corners) }.getOrNull() ?: return null
         val size = net.inputSize
-        val found = net.run(frame.warp(flatToFrame, size))
-        return read(found) { flatToFrame.apply(it.x * size, it.y * size) }
+        val flat = frame.warp(flatToFrame, size)
+        val found = net.run(flat)
+        return read(found, { flatToFrame.apply(it.x * size, it.y * size) }) { darts ->
+            val marks = darts.sortedByDescending { it.score }.map { Point(it.x * size, it.y * size) }
+            (tips?.refine(flat, marks) ?: marks).map { flatToFrame.apply(it.x, it.y) }
+        }
     }
 
-    private fun read(found: List<Detection>, toFrame: (Detection) -> Point): FrameDetections {
+    private fun read(found: List<Detection>, toFrame: (Detection) -> Point, dartMarks: (List<Detection>) -> List<Point> = { it.map(toFrame) }): FrameDetections {
         val corners = (DartClass.CAL_FIRST..DartClass.CAL_LAST).map { cls ->
             found.filter { it.cls == cls && it.score >= calibrationScore }.maxByOrNull { it.score }?.let(toFrame)
         }
-        val darts = found.filter { it.cls == DartClass.DART && it.score >= dartScore }.map(toFrame)
+        val darts = dartMarks(found.filter { it.cls == DartClass.DART && it.score >= dartScore })
         return FrameDetections(corners, darts)
     }
 

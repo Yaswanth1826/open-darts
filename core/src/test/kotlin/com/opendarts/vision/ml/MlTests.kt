@@ -167,6 +167,77 @@ class TwoPassDetectorTest {
     }
 }
 
+/** Fake tip network: the tip is the centre of the white blob in the patch; no blob means no tip. */
+private class WhiteBlobTipNet(override val patchSize: Int = 32) : TipNet {
+    var runs = 0
+
+    override fun run(patch: ColorFrame): TipReading {
+        runs++
+        var n = 0; var sx = 0.0; var sy = 0.0
+        for (y in 0 until patch.height) for (x in 0 until patch.width) {
+            val o = (y * patch.width + x) * 3
+            if ((patch.rgb[o].toInt() and 0xFF) > 200 && (patch.rgb[o + 1].toInt() and 0xFF) > 200 && (patch.rgb[o + 2].toInt() and 0xFF) > 200) { n++; sx += x + 0.5; sy += y + 0.5 }
+        }
+        if (n == 0) return TipReading(0.0, 0.0, 0.05)
+        return TipReading(sx / n - patch.width / 2.0, sy / n - patch.height / 2.0, 0.95)
+    }
+}
+
+class TipRefinerTest {
+    private fun flatWithTips(vararg tips: Point): ColorFrame {
+        val data = ByteArray(320 * 320 * 3) { 40 }
+        for (tip in tips) for (dy in -3..3) for (dx in -3..3) {
+            val o = ((Math.round(tip.y).toInt() + dy) * 320 + Math.round(tip.x).toInt() + dx) * 3
+            data[o] = 255.toByte(); data[o + 1] = 255.toByte(); data[o + 2] = 255.toByte()
+        }
+        return ColorFrame(320, 320, data)
+    }
+
+    @Test
+    fun movesAMarkOntoTheTip() {
+        val refined = TipRefiner(WhiteBlobTipNet()).refine(flatWithTips(Point(100.0, 100.0)), listOf(Point(104.0, 97.0))).single()
+        assertTrue("$refined", Math.hypot(refined.x - 100.0, refined.y - 100.0) < 1.0)
+    }
+
+    @Test
+    fun dropsAMarkWhereThereIsNoTip() {
+        assertTrue(TipRefiner(WhiteBlobTipNet()).refine(flatWithTips(Point(100.0, 100.0)), listOf(Point(200.0, 200.0))).isEmpty())
+    }
+
+    @Test
+    fun mergesTwoMarksOfTheSameDartAndKeepsTheBestFirst() {
+        val refined = TipRefiner(WhiteBlobTipNet()).refine(flatWithTips(Point(100.0, 100.0), Point(220.0, 150.0)), listOf(Point(103.0, 98.0), Point(98.0, 101.0), Point(223.0, 152.0)))
+        assertEquals(2, refined.size)
+        assertTrue(Math.hypot(refined[0].x - 100.0, refined[0].y - 100.0) < 1.0)
+        assertTrue(Math.hypot(refined[1].x - 220.0, refined[1].y - 150.0) < 1.0)
+    }
+
+    @Test
+    fun leavesAMarkAloneWhenItIsAlreadyOnTheTip() {
+        val net = WhiteBlobTipNet()
+        val refined = TipRefiner(net).refine(flatWithTips(Point(100.0, 100.0)), listOf(Point(100.0, 100.0))).single()
+        assertTrue(Math.hypot(refined.x - 100.0, refined.y - 100.0) < 1.0)
+        assertEquals(1, net.runs)
+    }
+
+    @Test
+    fun theDetectorUsesTheRefinerOnTheFlatBoard() {
+        val none = object : TipNet {
+            override val patchSize = 32
+            override fun run(patch: ColorFrame) = TipReading(0.0, 0.0, 0.0)
+        }
+        val net = object : DartNet {
+            override val inputSize = 320
+            override fun run(image: ColorFrame) = listOf(Detection(DartClass.DART, 0.9f, 0.5, 0.5)) +
+                (DartClass.CAL_FIRST..DartClass.CAL_LAST).map { Detection(it, 0.9f, 0.1 * it, 0.1 * it) }
+        }
+        val corners = listOf(Point(100.0, 100.0), Point(500.0, 100.0), Point(500.0, 400.0), Point(100.0, 400.0))
+        val frame = ColorFrame(640, 480, ByteArray(640 * 480 * 3))
+        assertEquals(1, TwoPassDetector(net).detect(frame, corners).darts.size)
+        assertTrue(TwoPassDetector(net, tips = TipRefiner(none)).detect(frame, corners).darts.isEmpty())
+    }
+}
+
 class PlacementTest {
     private fun assess(h: Homography, w: Int = 640, hgt: Int = 480) = PlacementAdvisor.assess(h, w, hgt)
 

@@ -2,9 +2,9 @@
 Cuts the training patches for the second-stage tip refiner out of the flattened pictures in a YOLO folder
 (the one prepare_deepdarts.py / prepare_dartscribe.py / from_captures.py fill).
 
-Every dart tip gives a 128 x 128 positive crop centred exactly on the tip; train_tip.py shifts a 96 x 96 window
+Every dart tip gives a 176 x 176 positive crop centred exactly on the tip; train_tip.py shifts a 96 x 96 window
 inside it, so the label "how far is the tip from the window centre" is known exactly. Negatives (nothing to refine:
-board, wires, numbers, flights, other darts' barrels) are cut from places 40+ px from every tip.
+board, wires, numbers, flights, other darts' barrels) are cut from places 46+ px from every tip.
 
 Only pictures where the board is flat and square-on are used (not the side-view copies or whole frames).
 
@@ -19,16 +19,16 @@ import cv2
 import numpy as np
 
 SIZE = 640
-CROP = 128
+CROP = 176
 BOARD_RADIUS_PX = 0.37628 * SIZE  # the 170 mm double-outer edge, in flat pixels
 PX_PER_MM = BOARD_RADIUS_PX / 170.0
 
 
 def is_flat(name):
     stem = os.path.splitext(name)[0]
-    if "_whole" in stem or "_side" in stem or stem.startswith("extra") or re.match(r"r\d+_", stem):
-        return False
-    return True
+    if "_whole" in stem or "_side" in stem or re.match(r"(r|extra)\d+_", stem):
+        return False  # side-view copies, whole frames and the repeated copies
+    return not stem.startswith("extra") or "_flat" in stem  # your own photos count through their flattened copies
 
 
 def source_of(name):
@@ -55,7 +55,7 @@ def far_from_tips(point, tips, distance):
     return all(np.hypot(point[0] - t[0], point[1] - t[1]) >= distance for t in tips)
 
 
-def random_board_point(rng, tips, distance=45):
+def random_board_point(rng, tips, distance=50):
     for _ in range(50):
         angle, radius = rng.uniform(0, 2 * np.pi), BOARD_RADIUS_PX * 1.05 * np.sqrt(rng.uniform())
         point = (SIZE / 2 + radius * np.cos(angle), SIZE / 2 + radius * np.sin(angle))
@@ -74,9 +74,9 @@ def patches_of(image, tips, rng, negatives):
         if tips and rng.random() < 0.5:
             # close to a dart but off its tip: the barrel, the flight, the shadow
             x, y = tips[rng.integers(len(tips))]
-            angle, distance = rng.uniform(0, 2 * np.pi), rng.uniform(40, 90)
+            angle, distance = rng.uniform(0, 2 * np.pi), rng.uniform(46, 100)
             point = (x + distance * np.cos(angle), y + distance * np.sin(angle))
-            if not far_from_tips(point, tips, 40):
+            if not far_from_tips(point, tips, 46):
                 continue
         else:
             point = random_board_point(rng, tips)
@@ -110,6 +110,7 @@ def main():
             image = cv2.imread(os.path.join(folder, n))
             if image is None:
                 continue
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # the app gives the network RGB
             if image.shape[:2] != (SIZE, SIZE):
                 image = cv2.resize(image, (SIZE, SIZE), interpolation=cv2.INTER_AREA)
             tips = read_tips(os.path.join(args.data, "labels", split, os.path.splitext(n)[0] + ".txt"))

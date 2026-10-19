@@ -14,6 +14,8 @@ import com.opendarts.vision.TrackerState
 import com.opendarts.vision.ml.BoardView
 import com.opendarts.vision.ml.DartNet
 import com.opendarts.vision.ml.MlDartTracker
+import com.opendarts.vision.ml.TipNet
+import com.opendarts.vision.ml.TipRefiner
 import com.opendarts.vision.ml.TwoPassDetector
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -55,9 +57,10 @@ class ScoringCamera(
     private val onStatus: (CameraStatus) -> Unit,
     private val capture: DebugCapture? = null,
     private val net: DartNet? = null,
+    private val tipNet: TipNet? = null,
     private val collector: TrainingCollector? = null,
 ) {
-    private val mlTracker = net?.let { MlDartTracker(TwoPassDetector(it)::detect) }
+    private val mlTracker = net?.let { MlDartTracker(TwoPassDetector(it, tips = tipNet?.let(::TipRefiner))::detect) }
     @Volatile private var mlActive = net != null
     @Volatile private var released = false
     private var lastLook = 0L
@@ -294,6 +297,7 @@ class ScoringCamera(
         released = true
         detector.shutdown()
         (net as? AutoCloseable)?.close()
+        (tipNet as? AutoCloseable)?.close()
         capture?.release()
         collector?.release()
     }
