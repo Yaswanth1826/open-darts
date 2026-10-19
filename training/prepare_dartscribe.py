@@ -117,6 +117,28 @@ def pick_unit(throws, board):
     return best, best_share
 
 
+def find_unit(throws_root, sessions, wanted=80):
+    """Decides the unit from the first few dozen scored throws (a handful can match by luck with a wrong unit)."""
+    sample, board = [], None
+    for session in sessions:
+        for group in sorted(os.listdir(os.path.join(throws_root, session))):
+            path = os.path.join(throws_root, session, group, "data.yaml")
+            if not os.path.exists(path):
+                continue
+            spec = load_yaml(path)
+            board = Board(spec["board"])
+            sample += [t for t in spec.get("dart_throws") or [] if t.get("hit") and t["hit"]["multiplier"] > 0]
+            if len(sample) >= wanted:
+                break
+        if len(sample) >= wanted:
+            break
+    if not sample:
+        return None
+    unit, share = pick_unit(sample, board)
+    print(f"board_position is a fraction of {unit} mm ({share:.0%} of {len(sample)} labels reproduce their score)", flush=True)
+    return unit
+
+
 def split_of(index, count):
     """Whole sessions to one split: about one in nine to val and one in nine to test."""
     if count < 6:
@@ -213,6 +235,7 @@ def main():
     parser.add_argument("--bucket", default=BUCKET, help="public Hugging Face bucket (or any bucket with the same folders) to download from")
     parser.add_argument("--max-groups", type=int, default=0, help="with --download: at most this many throw groups per session (0 = all)")
     parser.add_argument("--out", default="yolo_darts", help="YOLO folder to add to (the one prepare_deepdarts.py made)")
+    parser.add_argument("--unit", type=float, help="length (mm) that board_position is a fraction of; found from the scores when left out (170 in this dataset)")
     parser.add_argument("--flat", type=int, default=2, help="flattened copies per photo (each with slightly different corners)")
     parser.add_argument("--repeat", type=int, default=3, help="copies of every training picture, so ~1500 side-view photos are not drowned by the 37000 flat ones")
     parser.add_argument("--lenient", action="store_true", help="also use pictures where a dart's board position does not give its labelled score (the position is used)")
@@ -247,7 +270,10 @@ def main():
 
     throws_root = os.path.join(root, "throws")
     sessions = sorted(os.listdir(throws_root)) if os.path.isdir(throws_root) else []
-    unit = None
+    unit = args.unit or find_unit(throws_root, sessions)
+    if unit is None:
+        print("no scored throws found")
+        return
     wrong = darts_total = 0
     for s, session in enumerate(sessions):
         split = split_of(s, len(sessions))
@@ -258,11 +284,6 @@ def main():
             spec = load_yaml(os.path.join(folder, "data.yaml"))
             board = Board(spec["board"])
             throws = spec.get("dart_throws") or []
-            if unit is None and len(throws) >= 3:
-                unit, share = pick_unit(throws, board)
-                print(f"board_position is a fraction of {unit} mm ({share:.0%} of the first labels reproduce their score)", flush=True)
-            if unit is None:
-                continue
             for camera in spec["cameras"]:
                 h, error = fit(camera, board)
                 if h is None or error > 3.0:
