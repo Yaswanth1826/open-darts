@@ -484,6 +484,52 @@ class MlDartTrackerTest {
     }
 
     @Test
+    fun aMarkThePlayerRemovedDoesNotUseUpADartPlace() {
+        // One real dart shows two marks (tip and barrel); the player removes the second one from the score.
+        val tip = DartHit(20, Multiplier.SINGLE)
+        val barrel = DartHit(5, Multiplier.SINGLE)
+        visible = listOf(pixelOf(tip), pixelOf(barrel))
+        repeat(2) { look() }
+        assertEquals(2, tracker.darts)
+        assertTrue(tracker.ignoreAt(BoardGeometry.centreOf(barrel)))
+        assertEquals(1, tracker.darts)
+
+        val second = DartHit(3, Multiplier.TRIPLE)
+        val third = DartHit(19, Multiplier.DOUBLE)
+        val scored = ArrayList<DartHit>()
+        visible = listOf(pixelOf(tip), pixelOf(barrel), pixelOf(second))
+        repeat(2) { scored += landed(look()).map { it.hit } }
+        visible = listOf(pixelOf(tip), pixelOf(barrel), pixelOf(second), pixelOf(third))
+        repeat(2) { scored += landed(look()).map { it.hit } }
+        assertEquals(listOf(second, third), scored)
+        assertEquals(3, tracker.darts)
+    }
+
+    @Test
+    fun aMarkThePlayerRemovedIsNotScoredAgainAndDoesNotStopTheTurnPassing() {
+        val tip = DartHit(20, Multiplier.SINGLE)
+        val barrel = DartHit(5, Multiplier.SINGLE)
+        visible = listOf(pixelOf(tip), pixelOf(barrel))
+        repeat(2) { look() }
+        tracker.ignoreAt(BoardGeometry.centreOf(barrel))
+        repeat(6) { assertTrue(landed(look()).isEmpty()) }
+
+        visible = listOf(pixelOf(barrel))
+        val events = (0 until MlTrackerConfig().removeAfterMisses + 1).flatMap { look() }
+        assertEquals(TrackerEvent.DartsRemoved(0), events.filterIsInstance<TrackerEvent.DartsRemoved>().single())
+        assertEquals(0, tracker.darts)
+        assertTrue(tracker.dartPixels.isEmpty())
+    }
+
+    @Test
+    fun ignoringASpotWithNoDartDoesNothing() {
+        visible = listOf(pixelOf(DartHit(20, Multiplier.TRIPLE)))
+        repeat(2) { look() }
+        assertEquals(false, tracker.ignoreAt(BoardGeometry.centreOf(DartHit(3, Multiplier.SINGLE))))
+        assertEquals(1, tracker.darts)
+    }
+
+    @Test
     fun doesNotScoreTheSameDartTwice() {
         visible = listOf(pixelOf(DartHit(19, Multiplier.SINGLE)))
         repeat(2) { look() }

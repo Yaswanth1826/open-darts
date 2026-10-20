@@ -66,4 +66,52 @@ class GameSessionTest {
         s.throwDart(s5, fromCamera = true, spot = spotB)
         assertEquals(spotB, s.editDart(0, null, lookBehind = true))
     }
+
+    @Test
+    fun clearingTheBoardAfterTwoDartsOffersToAddTheMissedOne() {
+        val s = session()
+        val first = s.game!!.currentPlayer.name
+        s.throwDart(t20, fromCamera = true, spot = spotA)
+        s.throwDart(s5, fromCamera = true, spot = spotB)
+        s.dartsPulled()
+        assertTrue(s.game!!.currentPlayer.name != first)
+        assertEquals(first, s.shortTurn!!.player)
+        assertEquals(2, s.shortTurn!!.darts)
+
+        assertEquals(2, s.addMissedDart())
+        assertNull(s.shortTurn)
+        assertEquals(first, s.game!!.currentPlayer.name)
+        assertEquals(listOf(t20, s5), s.game!!.turnHits)
+    }
+
+    @Test
+    fun aFullTurnPassesWithoutAQuestion() {
+        val s = session()
+        s.throwDart(t20, fromCamera = true, spot = spotA)
+        s.throwDart(s5, fromCamera = true, spot = spotB)
+        s.throwDart(t20, fromCamera = true, spot = Point(30.0, -90.0))
+        s.dartsPulled()
+        assertNull(s.shortTurn)
+    }
+
+    @Test
+    fun theQuestionGoesAwayOnceTheNextPlayerThrows() {
+        val s = session()
+        s.throwDart(t20, fromCamera = true, spot = spotA)
+        s.dartsPulled()
+        assertEquals(1, s.shortTurn!!.darts)
+        s.throwDart(s5, fromCamera = true, spot = spotB)
+        assertNull(s.shortTurn)
+        assertNull(s.addMissedDart())
+        assertEquals(listOf(s5), s.game!!.turnHits)
+    }
+
+    @Test
+    fun anEmptyTurnIsNotHandedOver() {
+        val s = session()
+        val first = s.game!!.currentPlayer.name
+        s.dartsPulled()
+        assertEquals(first, s.game!!.currentPlayer.name)
+        assertNull(s.shortTurn)
+    }
 }

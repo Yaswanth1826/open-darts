@@ -161,6 +161,13 @@ class ScoringCamera(
         releases.add(board)
     }
 
+    private val ignores = java.util.concurrent.ConcurrentLinkedQueue<Point>()
+
+    /** The player removed the dart seen at [board] (millimetres) because it was no dart: it stops counting towards the three on the board. */
+    fun ignoreSpot(board: Point) {
+        ignores.add(board)
+    }
+
     /** Forgets the board and looks for it again. */
     fun findBoardAgain() {
         mlActive = net != null
@@ -240,6 +247,7 @@ class ScoringCamera(
         resetRequested.set(false)
         startRequested.set(false)
         while (true) tracker.releaseAt(releases.poll() ?: break)
+        while (true) tracker.ignoreAt(ignores.poll() ?: break)
         val events = tracker.process(colour, now)
         lastCorners = tracker.cornerPixels
         lastDarts = tracker.dartPixels

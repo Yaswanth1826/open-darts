@@ -23,9 +23,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableFloatStateOf
@@ -47,6 +49,7 @@ import com.opendarts.game.engine.DartGame
 import com.opendarts.game.x01.X01Game
 import com.opendarts.geometry.Point
 import com.opendarts.session.GameSession
+import com.opendarts.session.ShortTurn
 import com.opendarts.ui.camera.BoardOverlay
 import com.opendarts.ui.camera.CalibrationStore
 import com.opendarts.ui.camera.CameraPermissionGate
@@ -110,6 +113,13 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
         ).also { if (session.manualCalibration) it.useManualCalibration() }
     }
     DisposableEffect(camera) { onDispose { camera.release() } }
+    val shortTurn = session.shortTurn
+    LaunchedEffect(shortTurn) {
+        if (shortTurn != null) {
+            kotlinx.coroutines.delay(12_000)
+            session.dismissShortTurn()
+        }
+    }
     DisposableEffect(aligning) {
         camera.searchPaused = aligning
         onDispose { camera.searchPaused = false }
@@ -122,6 +132,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
             camera, status, markers, aligning, guide, { guide = it }, showBoard, round, session.message, game.isFinished,
             onAlign = { aligning = true }, onLock = { camera.useGuide(guide); aligning = false }, onCancelAlign = { aligning = false },
             onCalibrate = onCalibrate, onTips = { tips = true }, onUndo = { session.undo() }, canUndo = game.canUndo,
+            shortTurn = shortTurn, onAddMissed = { session.addMissedDart()?.let { editing = it } }, onDismissShort = { session.dismissShortTurn() },
             zoom = zoom, zoomRange = zoomRange, onZoomRange = { low, high -> zoomRange = low..high }, onZoom = chooseZoom, modifier = modifier,
         )
     }
@@ -173,6 +184,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
                 val was = game.turnHits.getOrNull(slot)
                 val seenAt = session.spotOf(slot)
                 session.editDart(slot, it)
+                if (it == null && seenAt != null) camera.ignoreSpot(seenAt)
                 if (was != it) camera.saveCorrection(was, it, seenAt)
             },
             onBehind = { session.dartBehind(slot, it) },
@@ -192,6 +204,7 @@ private fun CameraArea(
     showBoard: Boolean, round: String, message: String, finished: Boolean,
     onAlign: () -> Unit, onLock: () -> Unit, onCancelAlign: () -> Unit, onCalibrate: () -> Unit, onTips: () -> Unit,
     onUndo: () -> Unit, canUndo: Boolean,
+    shortTurn: ShortTurn?, onAddMissed: () -> Unit, onDismissShort: () -> Unit,
     zoom: Float, zoomRange: ClosedFloatingPointRange<Float>, onZoomRange: (Float, Float) -> Unit, onZoom: (Float) -> Unit,
     modifier: Modifier,
 ) {
@@ -216,6 +229,7 @@ private fun CameraArea(
                     }
                 }
                 ZoomButtons(zoom, zoomRange, onZoom, Modifier.align(Alignment.CenterEnd).padding(end = 10.dp))
+                if (shortTurn != null) ShortTurnBanner(shortTurn, onAddMissed, onDismissShort, Modifier.align(Alignment.BottomCenter).padding(start = 10.dp, end = 10.dp, bottom = 66.dp))
                 Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.Bottom) {
                     Box(Modifier.weight(1f, fill = false).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.75f)).padding(horizontal = 12.dp, vertical = 6.dp)) {
                         Text(round, color = Palette.Ink, fontFamily = Condensed, fontSize = 18.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
@@ -228,6 +242,22 @@ private fun CameraArea(
                 }
             }
         }
+    }
+}
+
+/** Shown after the board was cleared with fewer darts scored than the turn holds, so a dart the camera missed is not lost silently. */
+@Composable
+private fun ShortTurnBanner(short: ShortTurn, onAdd: () -> Unit, onDismiss: () -> Unit, modifier: Modifier) {
+    Row(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0xE6322E26)).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            "${short.player}: ${short.darts} ${if (short.darts == 1) "dart" else "darts"} scored. Missed one?",
+            color = Color.White, fontFamily = CondensedRegular, fontSize = 17.sp, modifier = Modifier.weight(1f),
+        )
+        Button(onClick = onAdd) { Text("Add dart", maxLines = 1) }
+        TextButton(onClick = onDismiss) { Text("OK", maxLines = 1) }
     }
 }
 

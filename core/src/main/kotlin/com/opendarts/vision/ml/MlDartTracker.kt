@@ -46,7 +46,8 @@ class MlDartTracker(
     private val detect: (ColorFrame, List<Point>?) -> FrameDetections,
     private val config: MlTrackerConfig = MlTrackerConfig(),
 ) {
-    private class Known(val board: Point, val pixel: Point, var misses: Int = 0)
+    /** An [ignored] mark is still matched, so it is not scored again, but it is not a dart: it takes no place of the three and is never reported. */
+    private class Known(val board: Point, val pixel: Point, var misses: Int = 0, var ignored: Boolean = false)
     /** [born] is the look where the dart was first seen, so darts confirmed together are scored in the order they landed. */
     private class Candidate(var board: Point, var pixel: Point, val born: Long, var seen: Int = 1)
 
@@ -68,7 +69,7 @@ class MlDartTracker(
         private set
     var view: BoardView? = null
         private set
-    val darts: Int get() = known.size
+    val darts: Int get() = known.count { !it.ignored }
 
     /** True while the last look had a hand or arm moving in front of the board. */
     var handInWay = false
@@ -78,13 +79,23 @@ class MlDartTracker(
     val cornerPixels: List<Point>? get() = corners
 
     /** The darts counted on the board, in frame pixels. */
-    val dartPixels: List<Point> get() = known.map { it.pixel }
+    val dartPixels: List<Point> get() = known.filter { !it.ignored }.map { it.pixel }
 
     /** Forgets the darts and takes the board as empty. */
     fun markBoardEmpty() {
         known.clear()
         candidates.clear()
         reference.clear()
+    }
+
+    /**
+     * The player says the mark at [board] is no dart (a second mark on the barrel, a bright spot): it stays known, so it is not
+     * scored again, but it no longer counts towards the three darts on the board. Returns false if no mark was known there.
+     */
+    fun ignoreAt(board: Point): Boolean {
+        val mark = known.filter { !it.ignored }.minByOrNull { dist(it.board, board) }?.takeIf { dist(it.board, board) <= config.sameDartMm * 2 } ?: return false
+        mark.ignored = true
+        return true
     }
 
     /**
@@ -136,7 +147,7 @@ class MlDartTracker(
             }
         }
         if (calmLooks >= config.calmLooksToRemove && graceLooks == 0) {
-            known.removeAll { (it.misses >= config.removeAfterMisses).also { gone -> if (gone) removed++ } }
+            known.removeAll { (it.misses >= config.removeAfterMisses).also { gone -> if (gone && !it.ignored) removed++ } }
         }
 
         val needed = if (handInWay) config.confirmLooksWithHand else config.confirmLooks
@@ -162,12 +173,12 @@ class MlDartTracker(
         if (handInWay) next += candidates
         candidates = next
         for (candidate in confirmed.sortedBy { it.born }) {
-            if (known.size >= config.maxDartsOnBoard) break
+            if (darts >= config.maxDartsOnBoard) break
             known += Known(candidate.board, candidate.pixel)
             events += TrackerEvent.DartLanded(BoardGeometry.hitAt(candidate.board), candidate.board, candidate.pixel)
         }
 
-        if (removed > 0) events += TrackerEvent.DartsRemoved(known.size)
+        if (removed > 0) events += TrackerEvent.DartsRemoved(darts)
         if (steady && candidates.isEmpty() && calmLooks >= 2) reference.capture(frame)
         return events
     }
