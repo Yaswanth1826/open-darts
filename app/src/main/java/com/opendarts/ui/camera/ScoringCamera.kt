@@ -2,6 +2,7 @@ package com.opendarts.ui.camera
 
 import android.os.Handler
 import android.os.Looper
+import com.opendarts.game.model.DartHit
 import com.opendarts.geometry.BoardGeometry
 import com.opendarts.geometry.Homography
 import com.opendarts.geometry.Point
@@ -89,6 +90,29 @@ class ScoringCamera(
         set(value) { collector?.enabled = value }
     @Volatile private var collected = collector?.count() ?: 0
     private var lastSample = 0L
+    @Volatile private var lastCorners: List<Point>? = null
+    @Volatile private var lastDarts: List<Point> = emptyList()
+
+    /**
+     * The player corrected a dart: [was] is what the camera scored (null if it saw nothing there), [now] what the player says
+     * it is (null if there was no dart), [seenAt] where the camera saw it on the board in mm. The latest picture is kept with
+     * both, so the network can learn from exactly the darts it got wrong.
+     */
+    fun saveCorrection(was: DartHit?, now: DartHit?, seenAt: Point?) {
+        if (!collecting || !mlActive) return
+        val frame = lastColor ?: return
+        val corners = lastCorners ?: return
+        val toPixel = mlTracker?.boardToPixel ?: return
+        val fix = org.json.JSONObject().put("was", was?.toString() ?: "").put("now", now?.toString() ?: "")
+        seenAt?.let { toPixel.apply(it).let { p -> fix.put("wasPixel", org.json.JSONArray().put(p.x).put(p.y)) } }
+        now?.let { toPixel.apply(BoardGeometry.centreOf(it)).let { p -> fix.put("nowPixel", org.json.JSONArray().put(p.x).put(p.y)) } }
+        collector?.save(frame, corners, lastDarts, TrainingCollector.fixNote(was?.toString(), now?.toString()), fix) { n ->
+            if (n >= 0) {
+                collected = n
+                lastStatus?.let { publish(it.copy(collected = n)) }
+            }
+        }
+    }
 
     fun deleteCollected(onDone: () -> Unit) {
         collector?.clear { collected = 0; lastStatus?.let { publish(it.copy(collected = 0)) }; main.post(onDone) }
@@ -217,6 +241,8 @@ class ScoringCamera(
         startRequested.set(false)
         while (true) tracker.releaseAt(releases.poll() ?: break)
         val events = tracker.process(colour, now)
+        lastCorners = tracker.cornerPixels
+        lastDarts = tracker.dartPixels
         val lookMs = System.currentTimeMillis() - now
         val ready = tracker.state == com.opendarts.vision.TrackerState.READY
         missedLooks = if (ready) 0 else missedLooks + 1

@@ -169,7 +169,13 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     editing?.let { slot ->
         DartEditor(
             slot, game.turnHits.getOrNull(slot), front = game.turnHits.take(slot), canLookBehind = session.canLookBehind(slot),
-            onPick = { session.editDart(slot, it) }, onBehind = { session.dartBehind(slot, it) },
+            onPick = {
+                val was = game.turnHits.getOrNull(slot)
+                val seenAt = session.spotOf(slot)
+                session.editDart(slot, it)
+                if (was != it) camera.saveCorrection(was, it, seenAt)
+            },
+            onBehind = { session.dartBehind(slot, it) },
             onLookBehind = { session.editDart(slot, null, lookBehind = true)?.let(camera::releaseSpot) }, onDismiss = { editing = null },
         )
     }

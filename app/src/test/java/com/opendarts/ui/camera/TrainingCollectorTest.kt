@@ -16,4 +16,11 @@ class TrainingCollectorTest {
         assertEquals("{\"a\":1}", String(out, 6, 7))
         assertArrayEquals(jpeg.copyOfRange(2, jpeg.size), out.copyOfRange(2 + 4 + 7, out.size))
     }
+
+    @Test
+    fun `a corrected dart is noted with what the camera said and what the player says`() {
+        assertEquals("fix-T20-S5", TrainingCollector.fixNote("T20", "S5"))
+        assertEquals("fix-missed-D16", TrainingCollector.fixNote(null, "D16"))
+        assertEquals("fix-T20-removed", TrainingCollector.fixNote("T20", null))
+    }
 }

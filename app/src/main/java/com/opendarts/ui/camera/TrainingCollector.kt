@@ -36,10 +36,13 @@ class TrainingCollector(private val context: Context) {
 
     fun full(): Boolean = count() >= LIMIT
 
-    /** Saves [frame] with its labels; [onSaved] gets the number of photos now stored (or -1 on failure). */
-    fun save(frame: ColorFrame, corners: List<Point>, darts: List<Point>, note: String, onSaved: (Int) -> Unit) {
-        if (released || corners.size != 4 || full()) return
-        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date())
+    /**
+     * Saves [frame] with its labels; [onSaved] gets the number of photos now stored (or -1 on failure).
+     * A [fix] is a dart the player corrected: the photo is kept even when the usual limit is reached, and what the player said is stored with it.
+     */
+    fun save(frame: ColorFrame, corners: List<Point>, darts: List<Point>, note: String, fix: JSONObject? = null, onSaved: (Int) -> Unit) {
+        if (released || corners.size != 4 || (full() && (fix == null || count() >= LIMIT + FIX_RESERVE))) return
+        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date()) + if (fix != null) "-fix" else ""
         io.execute {
             val saved = runCatching {
                 val json = JSONObject()
@@ -48,6 +51,7 @@ class TrainingCollector(private val context: Context) {
                     .put("corners", points(corners))
                     .put("darts", points(darts))
                     .put("note", note)
+                if (fix != null) json.put("fix", fix)
                 write("$stamp.jpg", withComment(jpeg(frame), json.toString()))
                 prefs.edit().putInt(COUNT, count() + 1).apply()
             }.isSuccess
@@ -107,8 +111,13 @@ class TrainingCollector(private val context: Context) {
     companion object {
         const val FOLDER = "OpenDarts/Training"
         const val LIMIT = 700
+        /** Room kept above [LIMIT] for photos of darts the player corrected, the most useful ones to retrain on. */
+        const val FIX_RESERVE = 100
         private const val ENABLED = "enabled"
         private const val COUNT = "count"
+
+        /** The note stored with a corrected dart: what the camera scored ([was], null if it saw nothing) and what the player says it is ([now], null if there was none). */
+        fun fixNote(was: String?, now: String?) = "fix-${was ?: "missed"}-${now ?: "removed"}"
 
         /** Puts [text] into a JPEG comment segment right after the start-of-image marker. */
         fun withComment(jpeg: ByteArray, text: String): ByteArray {

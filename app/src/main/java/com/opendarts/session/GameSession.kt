@@ -139,6 +139,9 @@ class GameSession : ViewModel() {
         changed()
     }
 
+    /** Where on the board (mm) the camera saw dart [index] of the turn on screen, or null if it was not seen by the camera. */
+    fun spotOf(index: Int): Point? = trace.spotOf(index)
+
     /** True when the camera saw dart [index] and nothing recorded as hidden sits behind it, so a look behind it makes sense. */
     fun canLookBehind(index: Int): Boolean = trace.spotOf(index) != null && !trace.hasDartBehind(index)
 

@@ -29,6 +29,8 @@ RING_RADII_MM = [6.35, 15.9, 99.0, 107.0, 162.0, 170.0]
 GREEN = (118, 230, 0)
 RED = (40, 40, 255)
 YELLOW = (0, 220, 255)
+ORANGE = (0, 140, 255)
+BLUE = (255, 160, 0)
 
 
 def ring_points(corners, radius_mm, steps=90):
@@ -48,7 +50,9 @@ class Photo:
         meta = saved or load_meta(path) or {}
         self.corners = [list(map(float, c)) for c in meta.get("corners", [])]
         self.darts = [list(map(float, d)) for d in meta.get("darts", [])]
-        self.note = (load_meta(path) or {}).get("note", "")
+        meta_note = load_meta(path) or {}
+        self.note = meta_note.get("note", "")
+        self.fix = meta_note.get("fix")
         self.checked = saved is not None
 
     def save(self, skip=False):
@@ -101,10 +105,21 @@ class View:
             x, y = map(int, self.to_canvas(*d))
             cv2.circle(canvas, (x, y), 9, RED, 2, cv2.LINE_AA)
             cv2.drawMarker(canvas, (x, y), RED, cv2.MARKER_CROSS, 7, 1, cv2.LINE_AA)
+        fix = p.fix
+        if fix:
+            if fix.get("wasPixel"):
+                x, y = map(int, self.to_canvas(*fix["wasPixel"]))
+                cv2.circle(canvas, (x, y), 16, ORANGE, 2, cv2.LINE_AA)
+            if fix.get("nowPixel"):
+                x, y = map(int, self.to_canvas(*fix["nowPixel"]))
+                cv2.drawMarker(canvas, (x, y), BLUE, cv2.MARKER_DIAMOND, 22, 2, cv2.LINE_AA)
         status = "set corner %d: click it" % pending_corner if pending_corner else \
             "%d darts   LMB add tip   RMB remove   z zoom   1-4 corner   SPACE next   b back   x skip   u undo   q quit" % len(p.darts)
         title = "%d/%d  %s  [%s]%s" % (index + 1, total, os.path.basename(p.path), p.note, "  checked" if p.checked else "")
-        for k, line in enumerate([title, status]):
+        lines = [title, status]
+        if fix:
+            lines.append("PLAYER FIX: camera said '%s', the player says '%s'. Orange ring = where the camera saw it, blue diamond = middle of the area the player named. Put the red tip on the real tip." % (fix.get("was") or "nothing", fix.get("now") or "no dart"))
+        for k, line in enumerate(lines):
             cv2.putText(canvas, line, (10, 24 + 24 * k), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 4, cv2.LINE_AA)
             cv2.putText(canvas, line, (10, 24 + 24 * k), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
         return canvas
@@ -125,6 +140,7 @@ def main():
     parser.add_argument("--all", action="store_true", help="also show the photos that were already checked")
     args = parser.parse_args()
     paths = [p for p in photos_in(args.folder) if args.all or not os.path.exists(labels_path(p))]
+    paths.sort(key=lambda p: "-fix" not in os.path.basename(p))
     if not paths:
         print("Nothing to check (use --all to go through the checked ones again).")
         return
