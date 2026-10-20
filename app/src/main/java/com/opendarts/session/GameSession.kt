@@ -14,9 +14,6 @@ import com.opendarts.game.engine.Outcome
 import com.opendarts.game.model.DartHit
 import com.opendarts.geometry.Point
 
-/** [player] had [darts] darts scored when the board was cleared, fewer than the turn holds. */
-class ShortTurn(val player: String, val darts: Int)
-
 /** Holds the running game across configuration changes and exposes a revision counter for Compose. */
 class GameSession : ViewModel() {
     var setup by mutableStateOf(GameSetup())
@@ -36,10 +33,6 @@ class GameSession : ViewModel() {
 
     /** Where each dart of the turn on screen was seen, and which ones hide behind another. */
     private val trace = TurnTrace()
-
-    /** Set when the board was cleared with fewer darts scored than were thrown; dropped as soon as anything else happens. */
-    var shortTurn by mutableStateOf<ShortTurn?>(null)
-        private set
 
     /** Everything played so far, saved after every change so an unfinished game survives the app being closed. */
     private val log = GameLog()
@@ -63,7 +56,6 @@ class GameSession : ViewModel() {
     }
 
     private fun changed() {
-        shortTurn = null
         revision++
         if (game != null) saver?.save(setup, log)
     }
@@ -197,28 +189,6 @@ class GameSession : ViewModel() {
     /** Called when the camera sees the board cleared: hands over only if the current player actually threw. */
     fun dartsPulled() {
         val g = game ?: return
-        if (g.isFinished || g.turnHits.isEmpty()) return
-        val player = g.currentPlayer.name
-        val scored = g.turnHits.size
-        val unfinished = !g.turnOver && scored < g.dartsPerTurn
-        nextPlayer()
-        if (unfinished) shortTurn = ShortTurn(player, scored)
-    }
-
-    fun dismissShortTurn() {
-        shortTurn = null
-    }
-
-    /**
-     * The player says the camera missed a dart: goes back to the turn that was just handed over and returns the empty slot to fill,
-     * or null when it is too late (the next player has moved on).
-     */
-    fun addMissedDart(): Int? {
-        val short = shortTurn ?: return null
-        shortTurn = null
-        val g = game ?: return null
-        if (g.turnHits.isNotEmpty()) return null
-        previousPlayer()
-        return g.turnHits.size.takeIf { it == short.darts }
+        if (!g.isFinished && g.turnHits.isNotEmpty()) nextPlayer()
     }
 }

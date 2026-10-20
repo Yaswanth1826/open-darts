@@ -14,8 +14,8 @@ data class MlTrackerConfig(
     val confirmLooksWithHand: Int = 3,
     /** A known dart that is not seen for this many consecutive looks has been pulled out. */
     val removeAfterMisses: Int = 4,
-    /** Detections closer than this (mm on the board) are the same dart. */
-    val sameDartMm: Double = 12.0,
+    /** Detections closer than this (mm on the board) are the same dart. Two real tips cannot be closer than a barrel width (about 7 mm), so a hidden dart that shows up beside another one is a new dart. */
+    val sameDartMm: Double = 8.0,
     /** Detections further than this from the bull are not darts in the board (the bezel, the logo, a hand), so they never count as a miss. */
     val ignoreBeyondMm: Double = 176.0,
     val maxDartsOnBoard: Int = 3,

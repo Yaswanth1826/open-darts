@@ -483,6 +483,49 @@ class MlDartTrackerTest {
         assertEquals(1, tracker.darts)
     }
 
+    /** A point on the board [mm] to the right of where [hit] is centred. */
+    private fun besideInMm(hit: DartHit, mm: Double) = BoardGeometry.centreOf(hit).let { Point(it.x + mm, it.y) }
+
+    @Test
+    fun aDartHidingNextToAnotherIsScoredWhenTheFrontDartIsNudgedAndItsTipShowsUp() {
+        val front = DartHit(20, Multiplier.SINGLE)
+        val hidden = besideInMm(front, 10.0)
+        visible = listOf(pixelOf(front))
+        repeat(2) { look() }
+        assertEquals(1, tracker.darts)
+        // The flights are moved aside: the front dart stays put and the dart behind it comes into view.
+        visible = listOf(pixelOf(front), boardToPixel.apply(hidden))
+        assertTrue(landed(look()).isEmpty())
+        val scored = landed(look()).single()
+        assertEquals(BoardGeometry.hitAt(hidden), scored.hit)
+        assertEquals(2, tracker.darts)
+        repeat(5) { assertTrue(landed(look()).isEmpty()) }
+    }
+
+    @Test
+    fun aDartHidingNextToAnotherIsScoredWhenTheFrontDartIsPulledOut() {
+        val front = DartHit(20, Multiplier.SINGLE)
+        val hidden = besideInMm(front, 10.0)
+        visible = listOf(pixelOf(front))
+        repeat(2) { look() }
+        visible = listOf(boardToPixel.apply(hidden))
+        val events = (0 until 8).flatMap { look() }
+        assertEquals(listOf(BoardGeometry.hitAt(hidden)), landed(events).map { it.hit })
+        assertEquals(1, tracker.darts)
+    }
+
+    @Test
+    fun aTipThatJittersAFewMillimetresIsStillTheSameDart() {
+        val hit = DartHit(20, Multiplier.TRIPLE)
+        visible = listOf(pixelOf(hit))
+        repeat(2) { look() }
+        for (i in 0 until 10) {
+            visible = listOf(boardToPixel.apply(besideInMm(hit, if (i % 2 == 0) 5.0 else -5.0)))
+            assertTrue(landed(look()).isEmpty())
+        }
+        assertEquals(1, tracker.darts)
+    }
+
     @Test
     fun aMarkThePlayerRemovedDoesNotUseUpADartPlace() {
         // One real dart shows two marks (tip and barrel); the player removes the second one from the score.
