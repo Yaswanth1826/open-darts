@@ -98,6 +98,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
                     is TrackerEvent.DartLanded -> { markers.add(event.pixel); haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); session.throwDart(event.hit, fromCamera = true, spot = event.board) }
                     is TrackerEvent.DartsRemoved -> {
                         while (markers.size > event.remaining && markers.isNotEmpty()) markers.removeAt(markers.lastIndex)
+                        session.cameraDartsRemoved()
                         if (event.remaining == 0) session.dartsPulled()
                     }
                 }

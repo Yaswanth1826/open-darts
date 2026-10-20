@@ -67,6 +67,12 @@ class GameSession : ViewModel() {
     var onDart: ((DartHit) -> Unit)? = null
     var onVisit: ((String) -> Unit)? = null
 
+    /** After a bust the player's remaining darts do not count; the camera still sees them until the board is cleared. */
+    private var bustDartsOnBoard = false
+
+    /** The camera saw darts leave the board, so whatever is thrown next is no longer left over from a bust. */
+    fun cameraDartsRemoved() { bustDartsOnBoard = false }
+
     private fun scored(g: DartGame<*>, hit: DartHit, outcome: Outcome) {
         onDart?.invoke(hit)
         if (g.turnOver) VisitCall.of(g, outcome)?.let { onVisit?.invoke(it) }
@@ -75,6 +81,7 @@ class GameSession : ViewModel() {
     fun start(newSetup: GameSetup) {
         setup = newSetup
         game = newSetup.buildGame()
+        bustDartsOnBoard = false
         log.clear()
         trace.sync(0)
         message = "${game!!.currentPlayer.name} to throw"
@@ -101,8 +108,14 @@ class GameSession : ViewModel() {
     fun throwDart(hit: DartHit, fromCamera: Boolean = false, spot: Point? = null, behind: Int? = null) {
         val g = game ?: return
         if (g.isFinished) return
+        if (fromCamera && bustDartsOnBoard && g.turnOver) {
+            message = "${g.currentPlayer.name} busted: dart after the bust not counted"
+            changed()
+            return
+        }
         val thrower = g.currentPlayer.name
         val outcome = g.throwDart(hit)
+        bustDartsOnBoard = outcome == Outcome.BUST && g.turnHits.size < g.dartsPerTurn
         log.add(GameAction.Throw(hit))
         trace.landed(g.turnHits.size, DartTrace(spot, behind))
         val source = if (fromCamera) "Camera: " else ""
@@ -121,6 +134,7 @@ class GameSession : ViewModel() {
 
     fun undo() {
         val g = game ?: return
+        bustDartsOnBoard = false
         message = if (g.undo()) { log.add(GameAction.Undo); "Last dart removed" } else "Nothing to undo"
         trace.sync(g.turnHits.size)
         dismissedResult = false
@@ -132,6 +146,7 @@ class GameSession : ViewModel() {
         if (g.isFinished) return
         if (!g.turnOver) VisitCall.of(g, null)?.let { onVisit?.invoke(it) }
         g.endTurn()
+        bustDartsOnBoard = false
         log.add(GameAction.NextTurn)
         trace.sync(0)
         message = "${g.currentPlayer.name} to throw"
@@ -141,6 +156,7 @@ class GameSession : ViewModel() {
     /** Goes back to the previous player's turn, keeping their darts so they can be corrected. */
     fun previousPlayer() {
         val g = game ?: return
+        bustDartsOnBoard = false
         if (g.previousPlayer()) {
             log.add(GameAction.Previous)
             trace.sync(0)

@@ -66,4 +66,38 @@ class GameSessionTest {
         s.throwDart(s5, fromCamera = true, spot = spotB)
         assertEquals(spotB, s.editDart(0, null, lookBehind = true))
     }
+
+    private fun bustedPlayerAtTwoDarts(): GameSession {
+        val s = GameSession().also { it.start(GameSetup(input = InputMode.CAMERA, x01 = com.opendarts.game.x01.X01Config(101))) }
+        s.throwDart(t20, fromCamera = true, spot = spotA)
+        s.throwDart(t20, fromCamera = true, spot = spotB)
+        return s
+    }
+
+    @Test
+    fun aDartTheCameraSeesAfterABustIsNotScoredForTheNextPlayer() {
+        val s = bustedPlayerAtTwoDarts()
+        s.throwDart(s5, fromCamera = true, spot = spotA)
+        val g = s.game!!
+        assertEquals(0, g.currentPlayerIndex)
+        assertEquals(2, g.turnHits.size)
+    }
+
+    @Test
+    fun afterTheBoardIsClearedTheNextPlayersDartsScoreNormally() {
+        val s = bustedPlayerAtTwoDarts()
+        s.cameraDartsRemoved()
+        s.dartsPulled()
+        s.throwDart(s5, fromCamera = true, spot = spotA)
+        val g = s.game!!
+        assertEquals(1, g.currentPlayerIndex)
+        assertEquals(listOf(s5), g.turnHits)
+    }
+
+    @Test
+    fun aKeyedInDartAfterABustStillWorks() {
+        val s = bustedPlayerAtTwoDarts()
+        s.throwDart(s5)
+        assertEquals(1, s.game!!.currentPlayerIndex)
+    }
 }
