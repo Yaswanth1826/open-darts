@@ -319,6 +319,9 @@ class MlDartTrackerTest {
         return ColorFrame(640, 480, rgb)
     }
 
+    /** A hand reaches in and leaves again, as it does to pull darts. */
+    private fun handPass() { for (step in 0 until 4) tracker.process(handAt(step)) }
+
     @Test
     fun aSmallCameraNudgeDoesNotScoreTheDartsAgain() {
         val hit = DartHit(20, Multiplier.TRIPLE)
@@ -509,7 +512,7 @@ class MlDartTrackerTest {
         visible = listOf(pixelOf(front))
         repeat(2) { look() }
         visible = listOf(boardToPixel.apply(hidden))
-        val events = (0 until 8).flatMap { look() }
+        val events = (0 until 4).flatMap { tracker.process(handAt(it)) } + (0 until 8).flatMap { look() }
         assertEquals(listOf(BoardGeometry.hitAt(hidden)), landed(events).map { it.hit })
         assertEquals(1, tracker.darts)
     }
@@ -558,6 +561,7 @@ class MlDartTrackerTest {
         repeat(6) { assertTrue(landed(look()).isEmpty()) }
 
         visible = listOf(pixelOf(barrel))
+        handPass()
         val events = (0 until MlTrackerConfig().removeAfterMisses + 1).flatMap { look() }
         assertEquals(TrackerEvent.DartsRemoved(0), events.filterIsInstance<TrackerEvent.DartsRemoved>().single())
         assertEquals(0, tracker.darts)
@@ -607,10 +611,46 @@ class MlDartTrackerTest {
         repeat(2) { look() }
         assertEquals(2, tracker.darts)
         visible = emptyList()
+        handPass()
         repeat(MlTrackerConfig().removeAfterMisses - 1) { assertTrue(look().isEmpty()) }
-        val events = look()
+        val events = (0 until 3).flatMap { look() }
         assertEquals(TrackerEvent.DartsRemoved(0), events.single())
         assertEquals(0, tracker.darts)
+    }
+
+    @Test
+    fun aDartTheNetworkLosesWithNoHandNearTheBoardIsNotTakenAsPulled() {
+        visible = listOf(pixelOf(DartHit(20, Multiplier.SINGLE)))
+        repeat(2) { look() }
+        visible = emptyList()
+        val events = (0 until MlTrackerConfig().removeAfterMissesNoHand - 1).flatMap { look() }
+        assertTrue(events.isEmpty())
+        assertEquals(1, tracker.darts)
+        visible = listOf(pixelOf(DartHit(20, Multiplier.SINGLE)))
+        assertTrue(look().isEmpty())
+        assertEquals(1, tracker.darts)
+    }
+
+    @Test
+    fun aDartThatVanishesForGoodWithNoHandIsStillGivenUpEventually() {
+        visible = listOf(pixelOf(DartHit(20, Multiplier.SINGLE)))
+        repeat(2) { look() }
+        visible = emptyList()
+        val events = (0 until MlTrackerConfig().removeAfterMissesNoHand + 1).flatMap { look() }
+        assertEquals(TrackerEvent.DartsRemoved(0), events.single())
+    }
+
+    @Test
+    fun aTipReadATwelveMillimetresAwayWithNoHandAboutIsTheSameDartNotANewOne() {
+        val hit = DartHit(20, Multiplier.TRIPLE)
+        visible = listOf(pixelOf(hit))
+        repeat(2) { look() }
+        visible = listOf(boardToPixel.apply(besideInMm(hit, 12.0)))
+        repeat(6) { assertTrue(landed(look()).isEmpty()) }
+        assertEquals(1, tracker.darts)
+        visible = listOf(boardToPixel.apply(besideInMm(hit, 12.0)))
+        repeat(20) { assertTrue(look().isEmpty()) }
+        assertEquals(1, tracker.darts)
     }
 
     @Test
