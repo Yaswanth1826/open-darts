@@ -19,6 +19,14 @@ data class DartHit(val base: Int, val multiplier: Multiplier = Multiplier.SINGLE
     val isTreble: Boolean get() = base != 0 && multiplier == Multiplier.TRIPLE
     val isBull: Boolean get() = base == 25
 
+    /** How a dart is shown to players: 20, D-20, T-20, 25, Bull, Miss. [toString] keeps the compact S20 form that the training notes use. */
+    val label: String
+        get() = when {
+            base == 0 -> "Miss"
+            base == 25 -> if (multiplier == Multiplier.DOUBLE) "Bull" else "25"
+            else -> when (multiplier) { Multiplier.SINGLE -> "$base"; Multiplier.DOUBLE -> "D-$base"; Multiplier.TRIPLE -> "T-$base" }
+        }
+
     override fun toString(): String = when {
         base == 0 -> "Miss"
         base == 25 -> if (multiplier == Multiplier.DOUBLE) "Bull" else "25"

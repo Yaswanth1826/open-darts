@@ -70,7 +70,7 @@ fun DartEditor(
             Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (current == null) "Dart ${slot + 1}: enter score" else "Dart ${slot + 1}: $current",
+                        if (current == null) "Dart ${slot + 1}: enter score" else "Dart ${slot + 1}: ${current.label}",
                         color = Palette.Ink, fontFamily = Condensed, fontSize = 22.sp, modifier = Modifier.weight(1f),
                     )
                     Text("CANCEL", color = Palette.Ink.copy(alpha = 0.6f), fontFamily = Condensed, fontSize = 16.sp, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onDismiss).padding(8.dp))
@@ -91,7 +91,7 @@ fun DartEditor(
                     if (current == null && front.isNotEmpty()) {
                         Text("Hidden behind a dart?", color = Palette.Ink.copy(alpha = 0.7f), fontFamily = Condensed, fontSize = 16.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            front.forEachIndexed { i, hit -> Key("Dart ${i + 1}: $hit", Modifier.weight(1f), key, Palette.KeyDark, 17) { onBehind(i); onDismiss() } }
+                            front.forEachIndexed { i, hit -> Key("Dart ${i + 1}: ${hit.label}", Modifier.weight(1f), key, Palette.KeyDark, 17) { onBehind(i); onDismiss() } }
                         }
                     }
                     val multipliers: @Composable (Modifier) -> Unit = { modifier ->

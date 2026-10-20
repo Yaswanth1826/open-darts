@@ -68,7 +68,7 @@ fun DartSlots(game: DartGame<*>, iconColour: Color, modifier: Modifier = Modifie
                 Modifier.weight(1f).height(46.dp).then(if (tappable) Modifier.clickable { onSlot?.invoke(i) } else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
-                if (hit == null) DartIcon(iconColour, width = (maxWidth - 8.dp).coerceIn(24.dp, 92.dp)) else Text(hit.toString(), color = Palette.Ink, fontFamily = Condensed, fontSize = 32.sp, maxLines = 1)
+                if (hit == null) DartIcon(iconColour, width = (maxWidth - 8.dp).coerceIn(24.dp, 92.dp)) else Text(hit.label, color = Palette.Ink, fontFamily = Condensed, fontSize = 32.sp, maxLines = 1)
             }
         }
     }

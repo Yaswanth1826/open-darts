@@ -11,6 +11,7 @@ import com.opendarts.game.engine.GameAction
 import com.opendarts.game.engine.GameLog
 import com.opendarts.game.engine.TurnTrace
 import com.opendarts.game.engine.Outcome
+import com.opendarts.game.engine.VisitCall
 import com.opendarts.game.model.DartHit
 import com.opendarts.geometry.Point
 
@@ -62,6 +63,15 @@ class GameSession : ViewModel() {
 
     val isRunning: Boolean get() = game != null
 
+    /** Set by the screen while it is showing: a dart was scored (from the camera or the keypad), and what to say when a visit ends. */
+    var onDart: ((DartHit) -> Unit)? = null
+    var onVisit: ((String) -> Unit)? = null
+
+    private fun scored(g: DartGame<*>, hit: DartHit, outcome: Outcome) {
+        onDart?.invoke(hit)
+        if (g.turnOver) VisitCall.of(g, outcome)?.let { onVisit?.invoke(it) }
+    }
+
     fun start(newSetup: GameSetup) {
         setup = newSetup
         game = newSetup.buildGame()
@@ -97,15 +107,16 @@ class GameSession : ViewModel() {
         trace.landed(g.turnHits.size, DartTrace(spot, behind))
         val source = if (fromCamera) "Camera: " else ""
         message = source + when (outcome) {
-            Outcome.BUST -> "$thrower: $hit - BUST"
-            Outcome.NOT_IN -> "$thrower: $hit - not in yet"
+            Outcome.BUST -> "$thrower: ${hit.label} - BUST"
+            Outcome.NOT_IN -> "$thrower: ${hit.label} - not in yet"
             Outcome.LEG_WON -> "$thrower wins the leg!"
             Outcome.SET_WON -> "$thrower wins the set!"
             Outcome.GAME_WON -> "$thrower wins!"
-            Outcome.NO_SCORE -> "$thrower: $hit"
-            else -> "$thrower: $hit"
+            Outcome.NO_SCORE -> "$thrower: ${hit.label}"
+            else -> "$thrower: ${hit.label}"
         }
         changed()
+        scored(g, hit, outcome)
     }
 
     fun undo() {
@@ -119,6 +130,7 @@ class GameSession : ViewModel() {
     fun nextPlayer() {
         val g = game ?: return
         if (g.isFinished) return
+        if (!g.turnOver) VisitCall.of(g, null)?.let { onVisit?.invoke(it) }
         g.endTurn()
         log.add(GameAction.NextTurn)
         trace.sync(0)
@@ -153,10 +165,11 @@ class GameSession : ViewModel() {
     fun editDart(index: Int, hit: DartHit?, lookBehind: Boolean = false): Point? {
         val g = game ?: return null
         val spot = trace.spotOf(index)
+        var added: Outcome? = null
         val done = when {
             index < g.turnHits.size -> g.editDart(index, hit).also { if (it) log.add(GameAction.Edit(index, hit)) }
             hit != null && index == g.turnHits.size && !g.isFinished -> {
-                g.throwDart(hit); log.add(GameAction.Throw(hit)); trace.landed(g.turnHits.size, DartTrace(null)); true
+                added = g.throwDart(hit); log.add(GameAction.Throw(hit)); trace.landed(g.turnHits.size, DartTrace(null)); true
             }
             else -> false
         }
@@ -166,10 +179,11 @@ class GameSession : ViewModel() {
         message = when {
             hit == null && lookBehind -> "Dart ${index + 1} removed \u2013 looking for a dart behind it"
             hit == null -> "Dart ${index + 1} removed"
-            else -> "${g.currentPlayer.name}: dart ${index + 1} is $hit"
+            else -> "${g.currentPlayer.name}: dart ${index + 1} is ${hit.label}"
         }
         dismissedResult = false
         changed()
+        if (hit != null && added != null) scored(g, hit, added)
         return if (hit == null && lookBehind) spot else null
     }
 
@@ -178,12 +192,13 @@ class GameSession : ViewModel() {
         val g = game ?: return
         val hit = g.turnHits.getOrNull(front) ?: return
         if (slot != g.turnHits.size || g.isFinished) return
-        g.throwDart(hit)
+        val outcome = g.throwDart(hit)
         log.add(GameAction.Throw(hit))
         trace.landed(g.turnHits.size, DartTrace(null, behind = front))
-        message = "${g.currentPlayer.name}: dart ${slot + 1} is $hit, behind dart ${front + 1}"
+        message = "${g.currentPlayer.name}: dart ${slot + 1} is ${hit.label}, behind dart ${front + 1}"
         dismissedResult = false
         changed()
+        scored(g, hit, outcome)
     }
 
     /** Called when the camera sees the board cleared: hands over only if the current player actually threw. */

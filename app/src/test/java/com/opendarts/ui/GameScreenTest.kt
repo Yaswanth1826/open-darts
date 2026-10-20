@@ -1,4 +1,4 @@
-package com.opendarts.ui
+﻿package com.opendarts.ui
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -55,11 +55,11 @@ class GameScreenTest {
         rule.runOnIdle { session.throwDart(com.opendarts.game.model.DartHit(20, com.opendarts.game.model.Multiplier.TRIPLE), fromCamera = true) }
         rule.waitForIdle()
         shot(shotName)
-        check(rule.onAllNodesWithText("T20").fetchSemanticsNodes().isNotEmpty()) { "dart slot did not update" }
+        check(rule.onAllNodesWithText("T-20").fetchSemanticsNodes().isNotEmpty()) { "dart slot did not update" }
         check(rule.onAllNodesWithText("441").fetchSemanticsNodes().isNotEmpty()) { "score did not update" }
         rule.runOnIdle { session.editDart(0, null) }
         rule.waitForIdle()
-        check(rule.onAllNodesWithText("T20").fetchSemanticsNodes().isEmpty()) { "removed dart still shown" }
+        check(rule.onAllNodesWithText("T-20").fetchSemanticsNodes().isEmpty()) { "removed dart still shown" }
     }
 
     @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
@@ -74,7 +74,7 @@ class GameScreenTest {
         rule.setContent { OpenDartsTheme { GameScreen(session, onExit = {}, onCalibrate = {}) } }
         rule.runOnIdle { session.throwDart(com.opendarts.game.model.DartHit(20, com.opendarts.game.model.Multiplier.TRIPLE), fromCamera = true, spot = com.opendarts.geometry.Point(0.0, 100.0)) }
         rule.waitForIdle()
-        rule.onNodeWithText("T20").performClick()
+        rule.onNodeWithText("T-20").performClick()
         rule.onNodeWithText("Remove \u2013 a dart is behind it").assertExists().performClick()
         rule.waitForIdle()
         check(session.game!!.turnHits.isEmpty()) { "dart was not removed" }
@@ -106,9 +106,9 @@ class GameScreenTest {
     fun scorePadFitsInLandscapeWithoutScrolling() {
         val session = GameSession().also { it.start(GameSetup(input = InputMode.MANUAL)) }
         rule.setContent { OpenDartsTheme { GameScreen(session, onExit = {}, onCalibrate = {}) } }
-        rule.runOnIdle { session.throwDart(com.opendarts.game.model.DartHit(20, com.opendarts.game.model.Multiplier.SINGLE)) }
+        rule.runOnIdle { session.throwDart(com.opendarts.game.model.DartHit(20, com.opendarts.game.model.Multiplier.TRIPLE)) }
         rule.waitForIdle()
-        rule.onNodeWithText("S20").performClick()
+        rule.onNodeWithText("T-20").performClick()
         rule.onNodeWithText("Change score").performClick()
         rule.waitForIdle()
         for (label in listOf("1", "10", "11", "20", "Bull", "Miss", "Triple")) {

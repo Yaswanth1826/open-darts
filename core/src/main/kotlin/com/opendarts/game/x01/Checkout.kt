@@ -53,5 +53,5 @@ object Checkout {
         return null
     }
 
-    fun format(route: List<DartHit>): String = route.joinToString(" ") { it.toString() }
+    fun format(route: List<DartHit>): String = route.joinToString(" ") { it.label }
 }

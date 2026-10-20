@@ -50,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -61,6 +62,8 @@ import com.opendarts.game.engine.DartGame
 import com.opendarts.game.x01.X01Game
 import com.opendarts.session.GameSession
 import com.opendarts.session.InputMode
+import com.opendarts.ui.common.Announcer
+import com.opendarts.ui.common.LocalAnnouncer
 import com.opendarts.ui.theme.Condensed
 import com.opendarts.ui.theme.CondensedRegular
 import com.opendarts.ui.theme.Palette
@@ -113,9 +116,16 @@ private fun GameWindow() {
 
 @Composable
 fun GameScreen(session: GameSession, onExit: () -> Unit, onCalibrate: () -> Unit) {
+    val context = LocalContext.current
+    val announcer = remember { Announcer(context) }
+    DisposableEffect(session, announcer) {
+        session.onDart = { announcer.dart() }
+        session.onVisit = announcer::say
+        onDispose { session.onDart = null; session.onVisit = null; announcer.release() }
+    }
     val game = session.game ?: return
     GameWindow()
-    CompositionLocalProvider(LocalGameRevision provides session.revision) {
+    CompositionLocalProvider(LocalGameRevision provides session.revision, LocalAnnouncer provides announcer) {
         if (session.setup.input == InputMode.CAMERA) CameraGame(session, game, onExit, onCalibrate) else ManualGame(session, game, onExit)
 
         if (game.isFinished && !session.dismissedResult) {
@@ -198,6 +208,7 @@ fun GameTopBar(
     var board by remember { mutableStateOf(false) }
     var confirmQuit by remember { mutableStateOf(false) }
     val camera = session.setup.input == InputMode.CAMERA
+    val announcer = LocalAnnouncer.current
     val configuration = LocalConfiguration.current
     val wide = configuration.screenWidthDp >= 600
     val short = configuration.screenHeightDp < 480
@@ -209,6 +220,7 @@ fun GameTopBar(
                 DropdownMenuItem(text = { Text("Scoreboard") }, onClick = { menu = false; board = true })
                 DropdownMenuItem(text = { Text("Undo last dart") }, enabled = game.canUndo, onClick = { menu = false; session.undo() })
                 extraMenu { menu = false }
+                announcer?.let { DropdownMenuItem(text = { Text((if (it.enabled) "\u2713 " else "") + "Sound and spoken score") }, onClick = { menu = false; it.toggle() }) }
                 DropdownMenuItem(text = { Text("Quit game") }, onClick = { menu = false; if (game.canUndo && !game.isFinished) confirmQuit = true else onExit() })
             }
         }
