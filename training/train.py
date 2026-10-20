@@ -45,12 +45,15 @@ def main():
     print("test mAP50:", metrics.box.map50)
 
     weights = str(model.trainer.best)
-    best = YOLO(weights)
-    exported = best.export(format="litert", imgsz=args.imgsz)
-    tflite = str(exported) if str(exported).endswith(".tflite") else None
-    if tflite is None or not os.path.exists(tflite):
-        found = glob.glob(os.path.join(os.path.dirname(weights), "**", "*.tflite"), recursive=True)
-        tflite = found[0]
+    try:
+        exported = YOLO(weights).export(format="litert", imgsz=args.imgsz)
+        tflite = str(exported) if str(exported).endswith(".tflite") else None
+        if tflite is None or not os.path.exists(tflite):
+            found = glob.glob(os.path.join(os.path.dirname(weights), "**", "*.tflite"), recursive=True)
+            tflite = found[0]
+    except Exception as error:  # the trained weights are safe in best.pt; they can be exported anywhere
+        print("TFLite export failed, the trained weights are in", weights, "-", error)
+        return
     shutil.copy(tflite, args.out)
     print("wrote", args.out, "-", round(os.path.getsize(args.out) / 1e6, 1), "MB")
 
