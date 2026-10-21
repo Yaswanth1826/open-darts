@@ -16,6 +16,23 @@ import com.opendarts.game.model.DartHit
 import com.opendarts.geometry.Point
 import com.opendarts.vision.ml.RememberedDart
 
+enum class CalloutKind { PLAIN, GOOD, BUST }
+
+/** The big word flashed over the board when a visit ends, e.g. BUST, NO SCORE, 60, 180 or GAME SHOT. */
+data class Callout(val player: String, val text: String, val kind: CalloutKind, val id: Int) {
+    companion object {
+        fun of(player: String, call: String, id: Int): Callout {
+            val kind = when (call) {
+                "Bust" -> CalloutKind.BUST
+                "Game shot", "One hundred and eighty" -> CalloutKind.GOOD
+                else -> CalloutKind.PLAIN
+            }
+            val text = if (call == "One hundred and eighty") "180" else call.uppercase()
+            return Callout(player, text, kind, id)
+        }
+    }
+}
+
 /** Holds the running game across configuration changes and exposes a revision counter for Compose. */
 class GameSession : ViewModel() {
     var setup by mutableStateOf(GameSetup())
@@ -74,6 +91,18 @@ class GameSession : ViewModel() {
     var onDart: ((DartHit) -> Unit)? = null
     var onVisit: ((String) -> Unit)? = null
 
+    /** The latest visit call, for the screen to flash; the screen clears it once shown. */
+    var callout by mutableStateOf<Callout?>(null)
+        private set
+    private var calloutId = 0
+
+    fun clearCallout(id: Int) { if (callout?.id == id) callout = null }
+
+    private fun visitEnded(g: DartGame<*>, call: String) {
+        callout = Callout.of(g.currentPlayer.name, call, ++calloutId)
+        onVisit?.invoke(call)
+    }
+
     /** After a bust or a leg won with fewer than three darts, further darts do not count; the camera still sees them until the board is cleared. */
     private var turnEndedEarly = false
 
@@ -82,7 +111,7 @@ class GameSession : ViewModel() {
 
     private fun scored(g: DartGame<*>, hit: DartHit, outcome: Outcome) {
         onDart?.invoke(hit)
-        if (g.turnOver) VisitCall.of(g, outcome)?.let { onVisit?.invoke(it) }
+        if (g.turnOver) VisitCall.of(g, outcome)?.let { visitEnded(g, it) }
     }
 
     fun start(newSetup: GameSetup) {
@@ -90,6 +119,7 @@ class GameSession : ViewModel() {
         game = newSetup.buildGame()
         turnEndedEarly = false
         cameraMemory = null
+        callout = null
         log.clear()
         trace.sync(0)
         message = "${game!!.currentPlayer.name} to throw"
@@ -110,6 +140,7 @@ class GameSession : ViewModel() {
     fun leave() {
         game = null
         cameraMemory = null
+        callout = null
         log.clear()
         saver?.clear()
         revision++
@@ -158,7 +189,7 @@ class GameSession : ViewModel() {
     fun nextPlayer() {
         val g = game ?: return
         if (g.isFinished) return
-        if (!g.turnOver) VisitCall.of(g, null)?.let { onVisit?.invoke(it) }
+        if (!g.turnOver) VisitCall.of(g, null)?.let { visitEnded(g, it) }
         g.endTurn()
         turnEndedEarly = false
         log.add(GameAction.NextTurn)

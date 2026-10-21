@@ -94,6 +94,40 @@ class GameSessionTest {
         assertEquals(listOf(s5), g.turnHits)
     }
 
+    @Test
+    fun aBustFlashesBustAndAClearedCalloutIsGone() {
+        val s = bustedPlayerAtTwoDarts()
+        val c = s.callout!!
+        assertEquals("BUST", c.text)
+        assertEquals(CalloutKind.BUST, c.kind)
+        assertEquals(s.game!!.currentPlayer.name, c.player)
+        s.clearCallout(c.id + 1)
+        assertEquals(c, s.callout)
+        s.clearCallout(c.id)
+        assertNull(s.callout)
+    }
+
+    @Test
+    fun aFinishedVisitFlashesItsTotalAndAHandOverWithNoDartsFlashesNoScore() {
+        val s = GameSession().also { it.start(GameSetup(input = InputMode.CAMERA)) }
+        repeat(3) { s.throwDart(t20, fromCamera = true, spot = spotA) }
+        assertEquals("180", s.callout!!.text)
+        assertEquals(CalloutKind.GOOD, s.callout!!.kind)
+        s.nextPlayer()
+        s.throwDart(s5, fromCamera = true, spot = spotA)
+        s.nextPlayer()
+        assertEquals("5", s.callout!!.text)
+        assertEquals(CalloutKind.PLAIN, s.callout!!.kind)
+    }
+
+    @Test
+    fun theGameShotIsFlashedAsGood() {
+        val s = GameSession().also { it.start(GameSetup(input = InputMode.CAMERA, x01 = com.opendarts.game.x01.X01Config(40))) }
+        s.throwDart(DartHit.double(20), fromCamera = true, spot = spotA)
+        assertEquals("GAME SHOT", s.callout!!.text)
+        assertEquals(CalloutKind.GOOD, s.callout!!.kind)
+    }
+
     private fun cameraLegGame() = GameSession().also {
         it.start(GameSetup(input = InputMode.CAMERA, x01 = com.opendarts.game.x01.X01Config(40, legsToWin = 2)))
         it.throwDart(DartHit.double(20), fromCamera = true, spot = spotA)

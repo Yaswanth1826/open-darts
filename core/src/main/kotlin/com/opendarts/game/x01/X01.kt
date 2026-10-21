@@ -2,6 +2,7 @@ package com.opendarts.game.x01
 
 import com.opendarts.game.engine.DartGame
 import com.opendarts.game.engine.AdvanceResult
+import com.opendarts.game.engine.FinishResult
 import com.opendarts.game.engine.Outcome
 import com.opendarts.game.engine.StepResult
 import com.opendarts.game.model.DartHit
@@ -35,6 +36,12 @@ data class X01Player(
     val totalDarts: Int = 0,
     val highestVisit: Int = 0,
     val checkoutHits: Int = 0,
+    /** Darts thrown when one dart could have finished the leg. */
+    val finishingDarts: Int = 0,
+    /** Visits that scored 100 or more, 140 or more, and exactly 180. */
+    val hundredPlus: Int = 0,
+    val oneFortyPlus: Int = 0,
+    val oneEighties: Int = 0,
 ) {
     /** Three-dart average over the whole match. */
     val average: Double get() = if (totalDarts == 0) 0.0 else totalPoints * 3.0 / totalDarts
@@ -64,6 +71,7 @@ class X01Game(players: List<Player>, val config: X01Config = X01Config()) : Dart
         var p = state.players[player]
         if (turnBefore.isEmpty()) p = p.copy(turnStart = p.remaining, turnStartIn = p.isIn, turnPoints = 0)
         p = p.copy(totalDarts = p.totalDarts + 1)
+        if (p.isIn && canFinishWithOneDart(p.remaining)) p = p.copy(finishingDarts = p.finishingDarts + 1)
 
         fun commit(np: X01Player) = state.copy(players = state.players.toMutableList().also { it[player] = np })
 
@@ -100,6 +108,20 @@ class X01Game(players: List<Player>, val config: X01Config = X01Config()) : Dart
         return StepResult(commit(p), Outcome.GAME_WON, turnOver = true, winners = listOf(player))
     }
 
+    override fun onTurnFinished(state: X01State, player: Int, turn: List<DartHit>, round: Int): FinishResult<X01State> {
+        val p = state.players[player]
+        val points = p.turnPoints
+        if (points < 100) return FinishResult(state)
+        val counted = p.copy(
+            hundredPlus = p.hundredPlus + 1,
+            oneFortyPlus = p.oneFortyPlus + if (points >= 140) 1 else 0,
+            oneEighties = p.oneEighties + if (points == 180) 1 else 0,
+        )
+        return FinishResult(state.copy(players = state.players.toMutableList().also { it[player] = counted }))
+    }
+
+    private fun canFinishWithOneDart(remaining: Int) = FINISHING_DARTS.any { it.points == remaining && counts(config.outMode, it) }
+
     override fun onAdvance(state: X01State, round: Int): AdvanceResult<X01State> {
         if (!state.legPending) return AdvanceResult(state)
         val legsPlayed = state.legsPlayed + 1
@@ -109,3 +131,6 @@ class X01Game(players: List<Player>, val config: X01Config = X01Config()) : Dart
         return AdvanceResult(X01State(reset, starter, legsPlayed), nextPlayer = starter, newRound = 1)
     }
 }
+
+private val FINISHING_DARTS: List<DartHit> =
+    (1..20).flatMap { listOf(DartHit.single(it), DartHit.double(it), DartHit.treble(it)) } + DartHit.OUTER_BULL + DartHit.INNER_BULL

@@ -39,7 +39,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -60,6 +63,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opendarts.game.engine.DartGame
 import com.opendarts.game.x01.X01Game
+import com.opendarts.game.x01.X01Summary
+import com.opendarts.game.x01.summaries
+import com.opendarts.session.Callout
+import com.opendarts.session.CalloutKind
 import com.opendarts.session.GameSession
 import com.opendarts.session.InputMode
 import com.opendarts.ui.common.Announcer
@@ -126,17 +133,67 @@ fun GameScreen(session: GameSession, onExit: () -> Unit, onCalibrate: () -> Unit
     val game = session.game ?: return
     GameWindow()
     CompositionLocalProvider(LocalGameRevision provides session.revision, LocalAnnouncer provides announcer) {
-        if (session.setup.input == InputMode.CAMERA) CameraGame(session, game, onExit, onCalibrate) else ManualGame(session, game, onExit)
+        Box(Modifier.fillMaxSize()) {
+            if (session.setup.input == InputMode.CAMERA) CameraGame(session, game, onExit, onCalibrate) else ManualGame(session, game, onExit)
+            session.callout?.let { CalloutFlash(it, onDone = { session.clearCallout(it.id) }) }
+        }
 
         if (game.isFinished && !session.dismissedResult) {
             val names = game.winners.orEmpty().joinToString(" & ") { game.players[it].name }
             AlertDialog(
                 onDismissRequest = { session.dismissedResult = true },
                 title = { Text(if (game.winners.orEmpty().size > 1) "Draw: $names" else "$names wins!") },
-                text = { Text("Great game. Play again with the same players, or head back to the menu.") },
+                text = {
+                    if (game is X01Game) MatchStats(game.summaries()) else Text("Great game. Play again with the same players, or head back to the menu.")
+                },
                 confirmButton = { Button(onClick = { session.rematch() }) { Text("Rematch") } },
                 dismissButton = { Row { TextButton(onClick = { session.dismissedResult = true }) { Text("Review") }; TextButton(onClick = onExit) { Text("Menu") } } },
             )
+        }
+    }
+}
+
+/** A big word over the board for a moment when a visit ends. It never takes touches. */
+@Composable
+private fun CalloutFlash(callout: Callout, onDone: () -> Unit) {
+    val pop = remember(callout.id) { Animatable(0.6f) }
+    LaunchedEffect(callout.id) {
+        pop.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.5f))
+        kotlinx.coroutines.delay(1500)
+        onDone()
+    }
+    val color = when (callout.kind) {
+        CalloutKind.BUST -> Palette.Red
+        CalloutKind.GOOD -> Palette.Teal
+        CalloutKind.PLAIN -> Palette.Charcoal
+    }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            callout.text, color = Color.White, fontFamily = Condensed, fontSize = 56.sp, maxLines = 1,
+            modifier = Modifier
+                .graphicsLayer { scaleX = pop.value; scaleY = pop.value }
+                .clip(RoundedCornerShape(16.dp)).background(color.copy(alpha = 0.92f)).padding(horizontal = 28.dp, vertical = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun MatchStats(rows: List<X01Summary>) {
+    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        rows.forEach { r ->
+            Column {
+                val result = buildString {
+                    if (r.sets > 0) append("${r.sets} sets \u00B7 ")
+                    if (r.legs > 0 || r.sets > 0) append("${r.legs} legs \u00B7 ")
+                }
+                Text(if (r.won) "${r.name}  \u2605" else r.name, fontFamily = Condensed, fontSize = 18.sp)
+                Text("${result}Avg ${"%.1f".format(r.average)} \u00B7 Best visit ${r.highestVisit} \u00B7 ${r.darts} darts", fontSize = 13.sp)
+                Text(
+                    "100+ ${r.hundredPlus} \u00B7 140+ ${r.oneFortyPlus} \u00B7 180s ${r.oneEighties}" +
+                        (r.checkoutPercent?.let { " \u00B7 Checkout $it%" } ?: ""),
+                    fontSize = 13.sp,
+                )
+            }
         }
     }
 }
