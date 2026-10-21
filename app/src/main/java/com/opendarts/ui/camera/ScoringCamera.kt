@@ -40,6 +40,8 @@ data class CameraStatus(
     val view: BoardView? = null,
     /** A hand or arm is moving in front of the board, so darts are neither added nor taken off until it has gone. */
     val handInWay: Boolean = false,
+    /** The board jumped in the picture (the phone was knocked) and its new position is still being checked. */
+    val moved: Boolean = false,
     /** Training photos stored on the phone. */
     val collected: Int = 0,
     /** How long the last look took, in milliseconds (shown with the board outline). */
@@ -276,7 +278,7 @@ class ScoringCamera(
             missedLooks >= NOT_FOUND_LOOKS -> CameraPhase.NOT_FOUND
             else -> CameraPhase.FINDING_BOARD
         }
-        publish(CameraStatus(phase, tracker.state, tracker.darts, tracker.boardToPixel, colour.width, colour.height, usingAi = true, view = tracker.view.takeIf { ready }, handInWay = tracker.handInWay, collected = collected, lookMs = lookMs))
+        publish(CameraStatus(phase, tracker.state, tracker.darts, tracker.boardToPixel, colour.width, colour.height, usingAi = true, view = tracker.view.takeIf { ready }, handInWay = tracker.handInWay, moved = tracker.cameraMoved, collected = collected, lookMs = lookMs))
         events.forEach { event ->
             if (collecting) collect(event, colour, tracker)
             main.post { onEvent(event) }

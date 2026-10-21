@@ -41,6 +41,8 @@ data class MlTrackerConfig(
     val confirmLooksWithChange: Int = 1,
     /** Darts the game already has but a new tracker never saw land are taken from the board within this many calm looks, without being scored again. */
     val adoptLooks: Int = 15,
+    /** After the camera moved, a known dart that is not back at its board position is the same dart if one is seen this close (mm) to where it was. */
+    val reanchorMm: Double = 60.0,
 )
 
 /** A dart the tracker knew about, kept so a new tracker (the screen was rebuilt, the phone turned) carries on where the old one stopped. */
@@ -56,7 +58,7 @@ class MlDartTracker(
     private val config: MlTrackerConfig = MlTrackerConfig(),
 ) {
     /** An [ignored] mark is still matched, so it is not scored again, but it is not a dart: it takes no place of the three and is never reported. */
-    private class Known(var board: Point, var pixel: Point, var seenAt: Long, var misses: Int = 0, var ignored: Boolean = false)
+    private class Known(var board: Point, var pixel: Point, var seenAt: Long, var misses: Int = 0, var ignored: Boolean = false, var rematched: Boolean = true)
     /** [born] is the look where the dart was first seen, so darts confirmed together are scored in the order they landed. */
     private class Candidate(var board: Point, var pixel: Point, val born: Long, var seen: Int = 1)
 
@@ -73,6 +75,7 @@ class MlDartTracker(
     private var lastHandLook = -1L
     private var adoptNext = 0
     private var adoptLooksLeft = 0
+    private var movedLooks = 0
     private val reference = ChangeReference()
 
     var state = TrackerState.WAITING_FOR_BOARD
@@ -82,6 +85,9 @@ class MlDartTracker(
     var view: BoardView? = null
         private set
     val darts: Int get() = known.count { !it.ignored }
+
+    /** True from the moment the board jumped in the picture (the phone was knocked) until the new position has been checked. */
+    val cameraMoved: Boolean get() = settling || movedLooks > 0
 
     /** True while the last look had a hand or arm moving in front of the board. */
     var handInWay = false
@@ -154,6 +160,9 @@ class MlDartTracker(
         lost = 0
         if (settling) return emptyList()
         if (graceLooks > 0) graceLooks--
+        var closing = false
+        if (movedLooks > 0) { movedLooks--; closing = movedLooks == 0 }
+        val holding = movedLooks > 0
         if (adoptLooksLeft > 0 && !handInWay && --adoptLooksLeft == 0) adoptNext = 0
         val diagonal = hypot(frame.width.toDouble(), frame.height.toDouble())
         val off = cal.indices.maxOf { dist(cal[it], corners!![it]) } / diagonal
@@ -179,6 +188,7 @@ class MlDartTracker(
                 unmatched.remove(near)
                 dart.misses = 0
                 dart.seenAt = looks
+                dart.rematched = true
             } else {
                 if (!handInWay) dart.misses++
                 unseen += dart
@@ -194,12 +204,7 @@ class MlDartTracker(
             dart.pixel = near.second
             dart.misses = 0
             dart.seenAt = looks
-        }
-        if (calmLooks >= config.calmLooksToRemove && graceLooks == 0) {
-            known.removeAll {
-                val limit = if (lastHandLook > it.seenAt) config.removeAfterMisses else config.removeAfterMissesNoHand
-                (it.misses >= limit).also { gone -> if (gone && !it.ignored) removed++ }
-            }
+            dart.rematched = true
         }
 
         val needed = if (handInWay) config.confirmLooksWithHand else config.confirmLooks
@@ -215,7 +220,7 @@ class MlDartTracker(
                 candidate.board = board
                 candidate.pixel = pixel
                 candidate.seen++
-                if (candidate.seen >= needed || (candidate.seen >= config.confirmLooksWithChange && fresh(pixel))) confirmed += candidate else next += candidate
+                if (!holding && (candidate.seen >= needed || (candidate.seen >= config.confirmLooksWithChange && fresh(pixel)))) confirmed += candidate else next += candidate
             } else {
                 val dart = Candidate(board, pixel, looks)
                 if (config.confirmLooksWithChange <= 1 && fresh(pixel)) confirmed += dart else next += dart
@@ -224,7 +229,15 @@ class MlDartTracker(
         // A hand can hide a dart for a look; do not forget it was seen.
         if (handInWay) next += candidates
         candidates = next
-        for (candidate in confirmed.sortedBy { it.born }) {
+        val arrived = confirmed.sortedBy { it.born }.toMutableList()
+        if (closing) reanchor(arrived)
+        if (calmLooks >= config.calmLooksToRemove && graceLooks == 0) {
+            known.removeAll {
+                val limit = if (lastHandLook > it.seenAt) config.removeAfterMisses else config.removeAfterMissesNoHand
+                (it.misses >= limit).also { gone -> if (gone && !it.ignored) removed++ }
+            }
+        }
+        for (candidate in arrived) {
             if (darts >= config.maxDartsOnBoard) break
             known += Known(candidate.board, candidate.pixel, looks)
             if (adoptNext > 0) { adoptNext--; continue }
@@ -234,6 +247,27 @@ class MlDartTracker(
         if (removed > 0) events += TrackerEvent.DartsRemoved(darts)
         if (steady && candidates.isEmpty() && calmLooks >= 2) reference.capture(frame)
         return events
+    }
+
+    /**
+     * The camera moved and the window for checking the new position is over. Darts that are not back at their board position,
+     * but have a newly seen dart close to where they were, are the same darts seen through a slightly different fit: they move
+     * there and the new sightings are not scored again. Darts with nothing near them stay and are judged by the usual rules.
+     */
+    private fun reanchor(arrived: MutableList<Candidate>) {
+        val lost = known.filter { !it.ignored && !it.rematched }.toMutableList()
+        while (lost.isNotEmpty() && arrived.isNotEmpty()) {
+            val pair = lost.flatMap { dart -> arrived.map { Triple(dart, it, dist(dart.board, it.board)) } }.minByOrNull { it.third }!!
+            if (pair.third > config.reanchorMm) break
+            val (dart, candidate) = pair
+            lost.remove(dart)
+            arrived.remove(candidate)
+            dart.board = candidate.board
+            dart.pixel = candidate.pixel
+            dart.seenAt = looks
+            dart.rematched = true
+        }
+        lost.forEach { it.misses = 0 }
     }
 
     /** A look without a usable board: keep the last fit for a while so a passing hand does not lose the game. */
@@ -258,8 +292,9 @@ class MlDartTracker(
                     settling = false
                     // The darts are kept: they are stored at board positions, which a moved camera does not change.
                     candidates.clear()
-                    known.forEach { it.misses = 0 }
+                    known.forEach { it.misses = 0; it.rematched = false }
                     graceLooks = config.graceLooks
+                    movedLooks = config.graceLooks
                     cal
                 } else previous
             } else {

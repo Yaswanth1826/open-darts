@@ -348,6 +348,50 @@ class MlDartTrackerTest {
     }
 
     @Test
+    fun aCameraKnockThatLeavesTheDartsFarFromWhereTheyWereIsNotScoredAgain() {
+        val hit = DartHit(5, Multiplier.SINGLE)
+        visible = listOf(pixelOf(hit))
+        repeat(3) { look() }
+        moveCamera(45.0, 30.0, listOf(hit))
+        // The new fit is off by a few centimetres: the dart shows up at a different board position.
+        visible = listOf(boardToPixel.apply(besideInMm(hit, 35.0)))
+        var movedSeen = false
+        repeat(20) {
+            val events = look()
+            movedSeen = movedSeen || tracker.cameraMoved
+            assertTrue(landed(events).isEmpty())
+            assertTrue(events.none { it is TrackerEvent.DartsRemoved })
+        }
+        assertTrue(movedSeen)
+        assertEquals(false, tracker.cameraMoved)
+        assertEquals(1, tracker.darts)
+    }
+
+    @Test
+    fun aCameraKnockWithTheDartsPulledAtTheSameTimePassesTheTurnOnce() {
+        val hit = DartHit(5, Multiplier.SINGLE)
+        visible = listOf(pixelOf(hit))
+        repeat(3) { look() }
+        moveCamera(45.0, 30.0, emptyList())
+        val events = (0 until 50).flatMap { look() }
+        assertEquals(TrackerEvent.DartsRemoved(0), events.filterIsInstance<TrackerEvent.DartsRemoved>().single())
+        assertEquals(0, tracker.darts)
+    }
+
+    @Test
+    fun aNewDartThatLandsRightAfterACameraKnockIsStillScored() {
+        val old = DartHit(5, Multiplier.SINGLE)
+        val fresh = DartHit(20, Multiplier.TRIPLE)
+        visible = listOf(pixelOf(old))
+        repeat(3) { look() }
+        moveCamera(45.0, 30.0, listOf(old))
+        repeat(15) { look() }
+        visible = listOf(pixelOf(old), pixelOf(fresh))
+        val scored = (0 until 4).flatMap { landed(look()) }
+        assertEquals(listOf(fresh), scored.map { it.hit })
+    }
+
+    @Test
     fun aHandCoveringTheDartsDoesNotPullThemOrPassTheTurn() {
         visible = listOf(pixelOf(DartHit(20, Multiplier.TRIPLE)))
         repeat(3) { tracker.process(handAt(null)) }
