@@ -14,6 +14,7 @@ import com.opendarts.game.engine.Outcome
 import com.opendarts.game.engine.VisitCall
 import com.opendarts.game.model.DartHit
 import com.opendarts.geometry.Point
+import com.opendarts.vision.ml.RememberedDart
 
 /** Holds the running game across configuration changes and exposes a revision counter for Compose. */
 class GameSession : ViewModel() {
@@ -63,15 +64,21 @@ class GameSession : ViewModel() {
 
     val isRunning: Boolean get() = game != null
 
+    /** What the camera knew about the darts on the board when its screen went away, so a turned phone or a pause does not score them again. */
+    var cameraMemory: List<RememberedDart>? = null
+
+    /** Set by the camera screen: the dart seen at this spot (mm) was undone, so the camera must not count it towards the three on the board. */
+    var onForget: ((Point) -> Unit)? = null
+
     /** Set by the screen while it is showing: a dart was scored (from the camera or the keypad), and what to say when a visit ends. */
     var onDart: ((DartHit) -> Unit)? = null
     var onVisit: ((String) -> Unit)? = null
 
-    /** After a bust the player's remaining darts do not count; the camera still sees them until the board is cleared. */
-    private var bustDartsOnBoard = false
+    /** After a bust or a leg won with fewer than three darts, further darts do not count; the camera still sees them until the board is cleared. */
+    private var turnEndedEarly = false
 
     /** The camera saw darts leave the board, so whatever is thrown next is no longer left over from a bust. */
-    fun cameraDartsRemoved() { bustDartsOnBoard = false }
+    fun cameraDartsRemoved() { turnEndedEarly = false }
 
     private fun scored(g: DartGame<*>, hit: DartHit, outcome: Outcome) {
         onDart?.invoke(hit)
@@ -81,7 +88,8 @@ class GameSession : ViewModel() {
     fun start(newSetup: GameSetup) {
         setup = newSetup
         game = newSetup.buildGame()
-        bustDartsOnBoard = false
+        turnEndedEarly = false
+        cameraMemory = null
         log.clear()
         trace.sync(0)
         message = "${game!!.currentPlayer.name} to throw"
@@ -94,12 +102,14 @@ class GameSession : ViewModel() {
     /** Switches between camera and keypad scoring in the middle of a game. */
     fun switchInput(mode: InputMode) {
         setup = setup.copy(input = mode)
+        cameraMemory = null
         changed()
     }
 
     /** Quits for good: the unfinished game is thrown away. (Leaving the screen with Back keeps it for Resume.) */
     fun leave() {
         game = null
+        cameraMemory = null
         log.clear()
         saver?.clear()
         revision++
@@ -108,14 +118,14 @@ class GameSession : ViewModel() {
     fun throwDart(hit: DartHit, fromCamera: Boolean = false, spot: Point? = null, behind: Int? = null) {
         val g = game ?: return
         if (g.isFinished) return
-        if (fromCamera && bustDartsOnBoard && g.turnOver) {
-            message = "${g.currentPlayer.name} busted: dart after the bust not counted"
+        if (fromCamera && turnEndedEarly && g.turnOver) {
+            message = "${g.currentPlayer.name}: dart seen after the visit ended is not counted"
             changed()
             return
         }
         val thrower = g.currentPlayer.name
         val outcome = g.throwDart(hit)
-        bustDartsOnBoard = outcome == Outcome.BUST && g.turnHits.size < g.dartsPerTurn
+        turnEndedEarly = (outcome == Outcome.BUST || outcome == Outcome.LEG_WON || outcome == Outcome.SET_WON) && g.turnHits.size < g.dartsPerTurn
         log.add(GameAction.Throw(hit))
         trace.landed(g.turnHits.size, DartTrace(spot, behind))
         val source = if (fromCamera) "Camera: " else ""
@@ -134,8 +144,12 @@ class GameSession : ViewModel() {
 
     fun undo() {
         val g = game ?: return
-        bustDartsOnBoard = false
-        message = if (g.undo()) { log.add(GameAction.Undo); "Last dart removed" } else "Nothing to undo"
+        turnEndedEarly = false
+        val before = g.turnHits.size
+        val seenAt = if (before > 0) trace.spotOf(before - 1) else null
+        val undone = g.undo()
+        if (undone && g.turnHits.size < before) seenAt?.let { onForget?.invoke(it) }
+        message = if (undone) { log.add(GameAction.Undo); "Last dart removed" } else "Nothing to undo"
         trace.sync(g.turnHits.size)
         dismissedResult = false
         changed()
@@ -146,7 +160,7 @@ class GameSession : ViewModel() {
         if (g.isFinished) return
         if (!g.turnOver) VisitCall.of(g, null)?.let { onVisit?.invoke(it) }
         g.endTurn()
-        bustDartsOnBoard = false
+        turnEndedEarly = false
         log.add(GameAction.NextTurn)
         trace.sync(0)
         message = "${g.currentPlayer.name} to throw"
@@ -156,7 +170,7 @@ class GameSession : ViewModel() {
     /** Goes back to the previous player's turn, keeping their darts so they can be corrected. */
     fun previousPlayer() {
         val g = game ?: return
-        bustDartsOnBoard = false
+        turnEndedEarly = false
         if (g.previousPlayer()) {
             log.add(GameAction.Previous)
             trace.sync(0)

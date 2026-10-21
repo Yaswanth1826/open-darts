@@ -94,6 +94,53 @@ class GameSessionTest {
         assertEquals(listOf(s5), g.turnHits)
     }
 
+    private fun cameraLegGame() = GameSession().also {
+        it.start(GameSetup(input = InputMode.CAMERA, x01 = com.opendarts.game.x01.X01Config(40, legsToWin = 2)))
+        it.throwDart(DartHit.double(20), fromCamera = true, spot = spotA)
+    }
+
+    @Test
+    fun aDartTheCameraSeesAfterALegWonWithFewerThanThreeDartsIsNotScoredInTheNextLeg() {
+        val s = cameraLegGame()
+        s.throwDart(s5, fromCamera = true, spot = spotB)
+        assertEquals(listOf(DartHit.double(20)), s.game!!.turnHits)
+        assertEquals(0, s.game!!.currentPlayerIndex)
+    }
+
+    @Test
+    fun onceTheBoardIsClearedTheNextLegStartsWithTheFirstDartCounted() {
+        val s = cameraLegGame()
+        s.cameraDartsRemoved()
+        s.dartsPulled()
+        s.throwDart(s5, fromCamera = true, spot = spotB)
+        assertEquals(1, s.game!!.currentPlayerIndex)
+        assertEquals(listOf(s5), s.game!!.turnHits)
+    }
+
+    @Test
+    fun undoingACameraDartTellsTheCameraToForgetItButAKeyedInDartHasNothingToForget() {
+        val s = session()
+        var forgotten: Point? = null
+        s.onForget = { forgotten = it }
+        s.throwDart(t20, fromCamera = true, spot = spotA)
+        s.throwDart(s5)
+        s.undo()
+        assertNull(forgotten)
+        s.undo()
+        assertEquals(spotA, forgotten)
+    }
+
+    @Test
+    fun undoingAHandOverDoesNotTellTheCameraToForgetAnything() {
+        val s = session()
+        var told = false
+        s.onForget = { told = true }
+        s.throwDart(t20, fromCamera = true, spot = spotA)
+        s.nextPlayer()
+        s.undo()
+        assertFalse(told)
+    }
+
     @Test
     fun aKeyedInDartAfterABustStillWorks() {
         val s = bustedPlayerAtTwoDarts()

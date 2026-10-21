@@ -47,6 +47,7 @@ import com.opendarts.game.engine.DartGame
 import com.opendarts.game.x01.X01Game
 import com.opendarts.geometry.Point
 import com.opendarts.session.GameSession
+import com.opendarts.session.InputMode
 import com.opendarts.ui.camera.BoardOverlay
 import com.opendarts.ui.camera.CalibrationStore
 import com.opendarts.ui.camera.CameraPermissionGate
@@ -98,8 +99,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
                     is TrackerEvent.DartLanded -> { markers.add(event.pixel); haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); session.throwDart(event.hit, fromCamera = true, spot = event.board) }
                     is TrackerEvent.DartsRemoved -> {
                         while (markers.size > event.remaining && markers.isNotEmpty()) markers.removeAt(markers.lastIndex)
-                        session.cameraDartsRemoved()
-                        if (event.remaining == 0) session.dartsPulled()
+                        if (event.remaining == 0) { session.cameraDartsRemoved(); session.dartsPulled() }
                     }
                 }
             },
@@ -108,9 +108,19 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
             net = TfliteDartNet.loadOrNull(context),
             tipNet = TfliteTipNet.loadOrNull(context),
             collector = collector,
-        ).also { if (session.manualCalibration) it.useManualCalibration() }
+        ).also {
+            if (session.manualCalibration) it.useManualCalibration()
+            it.resume(session.cameraMemory, adopt = game.turnHits.size)
+        }
     }
-    DisposableEffect(camera) { onDispose { camera.release() } }
+    DisposableEffect(camera) {
+        session.onForget = camera::ignoreSpot
+        onDispose {
+            if (session.game != null && session.setup.input == InputMode.CAMERA) session.cameraMemory = camera.remembered()
+            session.onForget = null
+            camera.release()
+        }
+    }
     DisposableEffect(aligning) {
         camera.searchPaused = aligning
         onDispose { camera.searchPaused = false }

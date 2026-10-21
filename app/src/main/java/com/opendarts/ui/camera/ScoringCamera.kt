@@ -17,6 +17,7 @@ import com.opendarts.vision.ml.DartNet
 import com.opendarts.vision.ml.MlDartTracker
 import com.opendarts.vision.ml.TipNet
 import com.opendarts.vision.ml.TipRefiner
+import com.opendarts.vision.ml.RememberedDart
 import com.opendarts.vision.ml.TwoPassDetector
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -154,6 +155,21 @@ class ScoringCamera(
         install(Homography.fromFourPoints(src, dst), w, h)
     }
 
+    @Volatile private var remembered: List<RememberedDart>? = null
+
+    /** What the tracker knows about the darts on the board, to hand to the next camera if this screen is rebuilt. Null without the network. */
+    fun remembered(): List<RememberedDart>? = if (mlTracker == null) null else remembered
+
+    /**
+     * Starts from what an earlier camera knew ([earlier]) or, when there is none, from the [adopt] darts the game already has this
+     * turn, so darts that are already on the board and already scored are not scored a second time.
+     */
+    fun resume(earlier: List<RememberedDart>?, adopt: Int) {
+        val t = mlTracker ?: return
+        if (earlier != null) t.remember(earlier) else t.adopt(adopt)
+        remembered = earlier
+    }
+
     private val releases = java.util.concurrent.ConcurrentLinkedQueue<Point>()
 
     /** A dart at [board] (millimetres) was taken out by the player because another is hiding behind it: score what is still seen there. */
@@ -251,6 +267,7 @@ class ScoringCamera(
         val events = tracker.process(colour, now)
         lastCorners = tracker.cornerPixels
         lastDarts = tracker.dartPixels
+        remembered = tracker.remembered()
         val lookMs = System.currentTimeMillis() - now
         val ready = tracker.state == com.opendarts.vision.TrackerState.READY
         missedLooks = if (ready) 0 else missedLooks + 1

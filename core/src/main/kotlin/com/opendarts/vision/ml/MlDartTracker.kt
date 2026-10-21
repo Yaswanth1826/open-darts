@@ -39,7 +39,12 @@ data class MlTrackerConfig(
     val calmLooksToRemove: Int = 3,
     /** A new dart that has visibly changed the picture around its tip (compared with the calm picture from before) counts after this many looks. */
     val confirmLooksWithChange: Int = 1,
+    /** Darts the game already has but a new tracker never saw land are taken from the board within this many calm looks, without being scored again. */
+    val adoptLooks: Int = 15,
 )
+
+/** A dart the tracker knew about, kept so a new tracker (the screen was rebuilt, the phone turned) carries on where the old one stopped. */
+data class RememberedDart(val board: Point, val ignored: Boolean)
 
 /**
  * Turns network detections into dart events. Every call to [process] is one "look" at the board: darts are
@@ -66,6 +71,8 @@ class MlDartTracker(
     private var calmLooks = 0
     private var looks = 0L
     private var lastHandLook = -1L
+    private var adoptNext = 0
+    private var adoptLooksLeft = 0
     private val reference = ChangeReference()
 
     var state = TrackerState.WAITING_FOR_BOARD
@@ -84,10 +91,31 @@ class MlDartTracker(
     val cornerPixels: List<Point>? get() = corners
 
     /** The darts counted on the board, in frame pixels. */
-    val dartPixels: List<Point> get() = known.filter { !it.ignored }.map { it.pixel }
+    val dartPixels: List<Point> get() = known.filter { !it.ignored }.map { boardToPixel?.apply(it.board) ?: it.pixel }
+
+    /** Where the darts known now are, for [remember] on a later tracker. */
+    fun remembered(): List<RememberedDart> = known.map { RememberedDart(it.board, it.ignored) }
+
+    /** Carries on where an earlier tracker stopped: these darts are on the board and already scored, so they are matched, not scored again. */
+    fun remember(darts: List<RememberedDart>) {
+        known.clear()
+        candidates.clear()
+        darts.forEach { known += Known(it.board, Point(0.0, 0.0), looks, ignored = it.ignored) }
+        graceLooks = config.graceLooks
+    }
+
+    /**
+     * The game has [count] darts of this turn that this tracker never saw land (the game was reopened, or switched over from the
+     * keypad). The next [count] darts it confirms in the first calm looks are those darts: counted as on the board, not scored.
+     */
+    fun adopt(count: Int) {
+        adoptNext = count
+        adoptLooksLeft = if (count > 0) config.adoptLooks else 0
+    }
 
     /** Forgets the darts and takes the board as empty. */
     fun markBoardEmpty() {
+        adoptNext = 0
         known.clear()
         candidates.clear()
         reference.clear()
@@ -126,6 +154,7 @@ class MlDartTracker(
         lost = 0
         if (settling) return emptyList()
         if (graceLooks > 0) graceLooks--
+        if (adoptLooksLeft > 0 && !handInWay && --adoptLooksLeft == 0) adoptNext = 0
         val diagonal = hypot(frame.width.toDouble(), frame.height.toDouble())
         val off = cal.indices.maxOf { dist(cal[it], corners!![it]) } / diagonal
         val fit = if (off > config.trustRawFraction) runCatching { Homography.fromFourPoints(BoardGeometry.MODEL_CALIBRATION_POINTS, cal) }.getOrNull() ?: smoothed else smoothed
@@ -198,6 +227,7 @@ class MlDartTracker(
         for (candidate in confirmed.sortedBy { it.born }) {
             if (darts >= config.maxDartsOnBoard) break
             known += Known(candidate.board, candidate.pixel, looks)
+            if (adoptNext > 0) { adoptNext--; continue }
             events += TrackerEvent.DartLanded(BoardGeometry.hitAt(candidate.board), candidate.board, candidate.pixel)
         }
 

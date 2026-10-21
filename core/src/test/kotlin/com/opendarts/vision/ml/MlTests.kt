@@ -298,13 +298,14 @@ class MlDartTrackerTest {
     private var withBoard = true
     private var hidden: Set<Int> = emptySet()
     private var hints = ArrayList<List<Point>?>()
-    private val tracker = MlDartTracker({ _, hint ->
+    private val detect: (ColorFrame, List<Point>?) -> FrameDetections = { _, hint ->
         hints += hint
         FrameDetections(
             BoardGeometry.MODEL_CALIBRATION_POINTS.mapIndexed { i, p -> if (withBoard && i !in hidden) boardToPixel.apply(p) else null },
             visible,
         )
-    })
+    }
+    private val tracker = MlDartTracker(detect)
 
     private fun look() = tracker.process(frame)
     private fun landed(events: List<TrackerEvent>) = events.filterIsInstance<TrackerEvent.DartLanded>()
@@ -616,6 +617,61 @@ class MlDartTrackerTest {
         val events = (0 until 3).flatMap { look() }
         assertEquals(TrackerEvent.DartsRemoved(0), events.single())
         assertEquals(0, tracker.darts)
+    }
+
+    @Test
+    fun aNewTrackerCarriesOnFromTheDartsAnEarlierOneRemembered() {
+        val hit = DartHit(20, Multiplier.TRIPLE)
+        visible = listOf(pixelOf(hit), pixelOf(DartHit(5, Multiplier.SINGLE)))
+        repeat(2) { look() }
+        val later = MlDartTracker(detect)
+        later.remember(tracker.remembered())
+        repeat(8) { assertTrue(landed(later.process(frame)).isEmpty()) }
+        assertEquals(2, later.darts)
+        assertEquals(2, later.dartPixels.size)
+        assertTrue(later.dartPixels.any { Math.hypot(it.x - pixelOf(hit).x, it.y - pixelOf(hit).y) < 1.0 })
+    }
+
+    @Test
+    fun aRememberedDartPulledWhileTheScreenWasAwayIsGivenUpAndAMarkTheGameIgnoredStaysIgnored() {
+        val tip = DartHit(20, Multiplier.SINGLE)
+        val mark = DartHit(5, Multiplier.SINGLE)
+        visible = listOf(pixelOf(tip), pixelOf(mark))
+        repeat(2) { look() }
+        tracker.ignoreAt(BoardGeometry.centreOf(mark))
+        val later = MlDartTracker(detect)
+        later.remember(tracker.remembered())
+        assertEquals(1, later.darts)
+        visible = listOf(pixelOf(mark))
+        val events = (0 until MlTrackerConfig().graceLooks + MlTrackerConfig().removeAfterMissesNoHand + 2).flatMap { later.process(frame) }
+        assertEquals(TrackerEvent.DartsRemoved(0), events.filterIsInstance<TrackerEvent.DartsRemoved>().single())
+        assertTrue(landed(events).isEmpty())
+    }
+
+    @Test
+    fun dartsTheGameAlreadyHasAreAdoptedNotScoredAgainAndANewOneStillIs() {
+        val first = DartHit(20, Multiplier.TRIPLE)
+        val second = DartHit(5, Multiplier.SINGLE)
+        val third = DartHit(19, Multiplier.DOUBLE)
+        val later = MlDartTracker(detect)
+        later.adopt(2)
+        visible = listOf(pixelOf(first), pixelOf(second))
+        repeat(4) { assertTrue(landed(later.process(frame)).isEmpty()) }
+        assertEquals(2, later.darts)
+        visible = listOf(pixelOf(first), pixelOf(second), pixelOf(third))
+        val scored = (0 until 3).flatMap { landed(later.process(frame)) }
+        assertEquals(listOf(third), scored.map { it.hit })
+    }
+
+    @Test
+    fun adoptingGivesUpWhenTheDartsAreNotThereSoItNeverEatsARealNewDart() {
+        val later = MlDartTracker(detect)
+        later.adopt(2)
+        visible = emptyList()
+        repeat(MlTrackerConfig().adoptLooks + 1) { later.process(frame) }
+        visible = listOf(pixelOf(DartHit(20, Multiplier.TRIPLE)))
+        later.process(frame)
+        assertEquals(DartHit(20, Multiplier.TRIPLE), landed(later.process(frame)).single().hit)
     }
 
     @Test
