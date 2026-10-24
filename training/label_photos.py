@@ -54,6 +54,18 @@ class Photo:
         self.note = meta_note.get("note", "")
         self.fix = meta_note.get("fix")
         self.checked = saved is not None
+        if saved is None and self.fix:
+            self.apply_fix()
+
+    def apply_fix(self):
+        """Start from what the player said: drop the dart the camera made up, and put one where the player named the area."""
+        was, now = self.fix.get("wasPixel"), self.fix.get("nowPixel")
+        if was and self.darts:
+            at = nearest(self.darts, was[0], was[1], 40)
+            if at is not None:
+                self.darts.pop(at)
+        if now:
+            self.darts.append([float(now[0]), float(now[1])])
 
     def save(self, skip=False):
         with open(labels_path(self.path), "w") as f:
@@ -118,7 +130,7 @@ class View:
         title = "%d/%d  %s  [%s]%s" % (index + 1, total, os.path.basename(p.path), p.note, "  checked" if p.checked else "")
         lines = [title, status]
         if fix:
-            lines.append("PLAYER FIX: camera said '%s', the player says '%s'. Orange ring = where the camera saw it, blue diamond = middle of the area the player named. Put the red tip on the real tip." % (fix.get("was") or "nothing", fix.get("now") or "no dart"))
+            lines.append("PLAYER FIX: camera said '%s', the player says '%s'. Orange ring = where the camera saw it, blue diamond = middle of the area the player named. The red circle starts at that diamond: right-click it and click the real tip instead." % (fix.get("was") or "nothing", fix.get("now") or "no dart"))
         for k, line in enumerate(lines):
             cv2.putText(canvas, line, (10, 24 + 24 * k), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 4, cv2.LINE_AA)
             cv2.putText(canvas, line, (10, 24 + 24 * k), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
