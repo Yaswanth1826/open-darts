@@ -150,8 +150,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("folder", help="the folder with the photos copied from the phone")
     parser.add_argument("--all", action="store_true", help="also show the photos that were already checked")
+    parser.add_argument("--darts-over", type=int, default=None, help="only the checked photos with more than this many dart marks (3 is a good check: at most three darts are on the board, plus any stuck outside the doubles)")
     args = parser.parse_args()
     paths = [p for p in photos_in(args.folder) if args.all or not os.path.exists(labels_path(p))]
+    if args.darts_over is not None:
+        paths = [p for p in photos_in(args.folder) if os.path.exists(labels_path(p)) and len(json.load(open(labels_path(p))).get("darts", [])) > args.darts_over]
     paths.sort(key=lambda p: "-fix" not in os.path.basename(p))
     if not paths:
         print("Nothing to check (use --all to go through the checked ones again).")
