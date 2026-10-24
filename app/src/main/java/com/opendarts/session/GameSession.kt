@@ -189,7 +189,11 @@ class GameSession : ViewModel() {
     fun nextPlayer() {
         val g = game ?: return
         if (g.isFinished) return
-        if (!g.turnOver) VisitCall.of(g, null)?.let { visitEnded(g, it) }
+        if (!g.turnOver) {
+            // A dart the camera never saw (it missed the board, bounced out or fell) was still thrown; without it the average and checkout counts would be wrong.
+            while (!g.turnOver && g.turnHits.size < g.dartsPerTurn) { g.throwDart(DartHit.MISS); log.add(GameAction.Throw(DartHit.MISS)) }
+            VisitCall.of(g, null)?.let { visitEnded(g, it) }
+        }
         g.endTurn()
         turnEndedEarly = false
         log.add(GameAction.NextTurn)

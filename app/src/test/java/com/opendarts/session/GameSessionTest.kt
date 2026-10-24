@@ -128,6 +128,34 @@ class GameSessionTest {
         assertEquals(CalloutKind.GOOD, s.callout!!.kind)
     }
 
+    @Test
+    fun dartsThatNeverShowedOnTheBoardCountAsMissesWhenTheTurnIsHandedOver() {
+        val s = GameSession().also { it.start(GameSetup(input = InputMode.CAMERA)) }
+        s.throwDart(s5, fromCamera = true, spot = spotA)
+        s.dartsPulled()
+        val first = (s.game as com.opendarts.game.x01.X01Game).gameState.players[0]
+        assertEquals(3, first.totalDarts)
+        assertEquals(1, s.game!!.currentPlayerIndex)
+        assertEquals("5", s.callout!!.text)
+    }
+
+    @Test
+    fun threeMissesWithNothingOnTheBoardAreANoScoreVisit() {
+        val s = GameSession().also { it.start(GameSetup(input = InputMode.CAMERA)) }
+        s.nextPlayer()
+        assertEquals("NO SCORE", s.callout!!.text)
+        assertEquals(3, (s.game as com.opendarts.game.x01.X01Game).gameState.players[0].totalDarts)
+        assertEquals(1, s.game!!.currentPlayerIndex)
+    }
+
+    @Test
+    fun aBustedVisitIsNotPaddedWithMisses() {
+        val s = bustedPlayerAtTwoDarts()
+        s.cameraDartsRemoved()
+        s.dartsPulled()
+        assertEquals(2, (s.game as com.opendarts.game.x01.X01Game).gameState.players[0].totalDarts)
+    }
+
     private fun cameraLegGame() = GameSession().also {
         it.start(GameSetup(input = InputMode.CAMERA, x01 = com.opendarts.game.x01.X01Config(40, legsToWin = 2)))
         it.throwDart(DartHit.double(20), fromCamera = true, spot = spotA)

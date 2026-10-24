@@ -64,7 +64,7 @@ class Photo:
             at = nearest(self.darts, was[0], was[1], 40)
             if at is not None:
                 self.darts.pop(at)
-        if now:
+        if now and self.fix.get("now") != "Miss":
             self.darts.append([float(now[0]), float(now[1])])
 
     def save(self, skip=False):
