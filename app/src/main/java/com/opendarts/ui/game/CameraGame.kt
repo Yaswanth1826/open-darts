@@ -277,7 +277,7 @@ private fun OverlayButton(enabled: Boolean = true, onClick: () -> Unit, content:
 @Composable
 private fun StatusPill(status: CameraStatus, message: String, debug: Boolean, modifier: Modifier) {
     val text = when (status.phase) {
-        CameraPhase.TRACKING -> if (status.moved) "Camera moved \u2013 checking the board, scores are kept" else if (status.handInWay) "Hand on the board \u2013 adjust the darts, scores are kept" else when (status.tracker) {
+        CameraPhase.TRACKING -> if (status.moved) "Camera moved \u2013 checking the board, scores are kept" else if (status.handInWay) "Hand on the board" else when (status.tracker) {
             TrackerState.WAITING_FOR_BOARD -> "Scanning the empty board \u2013 keep hands clear"
             TrackerState.MOVING -> "Detecting\u2026"
             TrackerState.SETTLING -> "Hold on\u2026"

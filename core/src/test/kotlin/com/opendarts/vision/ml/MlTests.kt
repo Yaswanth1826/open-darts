@@ -581,15 +581,32 @@ class MlDartTrackerTest {
     }
 
     @Test
-    fun aHandParkedOverADartForALongTimeDoesNotRemoveIt() {
-        val a = DartHit(20, Multiplier.TRIPLE)
-        val b = DartHit(19, Multiplier.SINGLE)
-        visible = listOf(pixelOf(a), pixelOf(b))
-        repeat(2) { look() }
-        visible = listOf(pixelOf(b))
-        val events = (0 until 40).flatMap { tracker.process(handAt(1)) }
-        assertTrue("events $events", events.none { it is TrackerEvent.DartsRemoved })
-        assertEquals(2, tracker.darts)
+    fun dartsPulledByAHandNeverBlockTheNextDarts() {
+        val pulled = listOf(DartHit(20, Multiplier.TRIPLE), DartHit(19, Multiplier.SINGLE), DartHit(3, Multiplier.SINGLE))
+        visible = pulled.map(::pixelOf)
+        repeat(3) { look() }
+        assertEquals(3, tracker.darts)
+        // The hand comes in and the darts are gone, but the board is read as before until the new dart shows up straight away.
+        val fresh = DartHit(11, Multiplier.DOUBLE)
+        visible = listOf(pixelOf(fresh))
+        val events = (0 until 4).flatMap { tracker.process(handAt(it)) } + (0 until 10).flatMap { look() }
+        assertEquals(listOf(fresh), landed(events).map { it.hit })
+        assertEquals(1, tracker.darts)
+    }
+
+    @Test
+    fun pulledDartsAreForgottenQuicklyOnceTheHandIsAway() {
+        visible = listOf(pixelOf(DartHit(20, Multiplier.TRIPLE)), pixelOf(DartHit(19, Multiplier.SINGLE)), pixelOf(DartHit(3, Multiplier.SINGLE)))
+        repeat(3) { look() }
+        visible = emptyList()
+        for (step in 0 until 4) tracker.process(handAt(step))
+        var looksUntilGone = 0
+        var gone = false
+        while (!gone && looksUntilGone < 12) {
+            looksUntilGone++
+            gone = look().any { it is TrackerEvent.DartsRemoved && it.remaining == 0 }
+        }
+        assertTrue("took $looksUntilGone looks", gone && looksUntilGone <= 5)
     }
 
     @Test

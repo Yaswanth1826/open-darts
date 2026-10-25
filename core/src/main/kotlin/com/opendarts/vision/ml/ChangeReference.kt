@@ -57,9 +57,6 @@ class ChangeReference(
     }
 
     inner class Change internal constructor(private val changed: BooleanArray) {
-        /** The share of the picture that differs from before: a dart pulled out is a sliver, a hand or an arm is a large part. */
-        val share: Double get() = changed.count { it }.toDouble() / changed.size
-
         /** True if enough of the picture within a few centimetres of [pixel] is different from before. */
         fun around(pixel: Point): Boolean {
             val span = (radius / block).roundToInt()
