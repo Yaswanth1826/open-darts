@@ -29,6 +29,9 @@ sealed interface TrackerEvent {
     data class DartLanded(val hit: DartHit, val board: Point, val pixel: Point) : TrackerEvent
     /** [remaining] darts are still in the board; 0 means the board is clear and the next turn can start. */
     data class DartsRemoved(val remaining: Int) : TrackerEvent
+
+    /** The dart that was at [from] (board mm) has been moved by a hand and now sits at [board]: the same dart, not a new one. */
+    data class DartMoved(val from: Point, val fromPixel: Point, val hit: DartHit, val board: Point, val pixel: Point) : TrackerEvent
 }
 
 enum class TrackerState { WAITING_FOR_BOARD, MOVING, SETTLING, READY }

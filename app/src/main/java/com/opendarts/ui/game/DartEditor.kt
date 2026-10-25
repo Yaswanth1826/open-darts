@@ -37,8 +37,8 @@ import com.opendarts.ui.theme.Condensed
 import com.opendarts.ui.theme.Palette
 
 /**
- * What to do with one dart slot: for a dart that is there, mark it a miss, remove it or pick another score;
- * for the next empty slot, enter a dart by hand. [onPick] gets the new score, or null to remove the dart.
+ * One tap on a dart slot opens the score pad at once, for a dart that is there as well as for the next empty slot: one more
+ * tap picks the score. A dart that is there can also be removed from the pad. [onPick] gets the new score, or null to remove the dart.
  * A dart the camera could not see because it sits behind another one is added with [onBehind] (index of the front dart);
  * when the front dart is removed, [onLookBehind] asks the camera to score whatever dart is still visible there.
  *
@@ -55,7 +55,6 @@ fun DartEditor(
     onLookBehind: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var choosing by remember { mutableStateOf(current == null) }
     var multiplier by remember { mutableStateOf(current?.multiplier?.takeIf { current.base in 1..20 } ?: Multiplier.SINGLE) }
     val done: (DartHit?) -> Unit = { onPick(it); onDismiss() }
     val configuration = LocalConfiguration.current
@@ -70,24 +69,12 @@ fun DartEditor(
             Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (current == null) "Dart ${slot + 1}: enter score" else "Dart ${slot + 1}: ${current.label}",
+                        if (current == null) "Dart ${slot + 1}: enter score" else "Dart ${slot + 1}: ${current.label} \u2013 pick the right score",
                         color = Palette.Ink, fontFamily = Condensed, fontSize = 22.sp, modifier = Modifier.weight(1f),
                     )
                     Text("CANCEL", color = Palette.Ink.copy(alpha = 0.6f), fontFamily = Condensed, fontSize = 16.sp, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onDismiss).padding(8.dp))
                 }
-                if (!choosing) {
-                    val actions = buildList<Pair<String, () -> Unit>> {
-                        add("Change score" to { choosing = true })
-                        add("Make it a miss" to { done(DartHit.MISS) })
-                        add("Remove this dart" to { done(null) })
-                        if (canLookBehind) add("Remove \u2013 a dart is behind it" to { onLookBehind(); onDismiss() })
-                    }
-                    if (wide) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { actions.forEachIndexed { i, (label, run) -> Action(label, i == 0, Modifier.weight(1f), run) } }
-                    } else {
-                        actions.forEachIndexed { i, (label, run) -> Action(label, i == 0, Modifier.fillMaxWidth(), run) }
-                    }
-                } else {
+                run {
                     if (current == null && front.isNotEmpty()) {
                         Text("Hidden behind a dart?", color = Palette.Ink.copy(alpha = 0.7f), fontFamily = Condensed, fontSize = 16.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -116,22 +103,23 @@ fun DartEditor(
                     }
                     (1..20).chunked(if (wide) 10 else 5).forEach { numbers ->
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            numbers.forEach { n -> Key(n.toString(), Modifier.weight(1f), key, Palette.KeyDark.copy(alpha = 0.55f)) { done(DartHit(n, multiplier)) } }
+                            numbers.forEach { n ->
+                                val isCurrent = current != null && current.base == n && current.multiplier == multiplier
+                                Key(n.toString(), Modifier.weight(1f), key, Palette.KeyDark.copy(alpha = if (isCurrent) 1f else 0.55f)) { done(DartHit(n, multiplier)) }
+                            }
                         }
                     }
                     if (!wide) specials(Modifier)
+                    if (current != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Key("Remove dart", Modifier.weight(1f), key, Palette.Red.copy(alpha = 0.18f), 17) { done(null) }
+                            if (canLookBehind) Key("Remove \u2013 a dart is behind it", Modifier.weight(1.6f), key, Palette.Red.copy(alpha = 0.18f), 17) { onLookBehind(); onDismiss() }
+                        }
+                    }
                 }
             }
         }
     }
-}
-
-@Composable
-private fun Action(label: String, primary: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Box(
-        modifier.height(46.dp).clip(RoundedCornerShape(12.dp)).background(if (primary) Palette.Red else Palette.KeyMid).clickable(onClick = onClick).padding(horizontal = 8.dp),
-        contentAlignment = Alignment.Center,
-    ) { Text(label, color = if (primary) Color.White else Palette.Ink, fontFamily = Condensed, fontSize = 17.sp, textAlign = TextAlign.Center, maxLines = 2, lineHeight = 18.sp) }
 }
 
 @Composable

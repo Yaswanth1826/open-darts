@@ -24,6 +24,12 @@ class TurnTrace {
     /** True when a dart the player reported as hidden is recorded behind dart [index]. */
     fun hasDartBehind(index: Int): Boolean = darts.any { it.behind == index }
 
+    /** Dart [index] was moved by a hand to [spot]. */
+    fun moved(index: Int, spot: Point) {
+        val d = darts.getOrNull(index) ?: return
+        darts[index] = DartTrace(spot, d.behind)
+    }
+
     /** Makes the trace [size] darts long: unknown darts are added, extra ones dropped. */
     fun sync(size: Int) {
         while (darts.size > size) darts.removeAt(darts.lastIndex)

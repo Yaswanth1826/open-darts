@@ -563,6 +563,36 @@ class MlDartTrackerTest {
     }
 
     @Test
+    fun aDartNudgedByAHandOnAFullBoardIsNotScoredForTheNextPlayer() {
+        val a = DartHit(20, Multiplier.TRIPLE)
+        val b = DartHit(19, Multiplier.SINGLE)
+        val c = DartHit(3, Multiplier.SINGLE)
+        visible = listOf(pixelOf(a), pixelOf(b), pixelOf(c))
+        repeat(2) { look() }
+        repeat(2) { look() }
+        assertEquals(3, tracker.darts)
+        val moved = besideInMm(c, 22.0)
+        visible = listOf(pixelOf(a), pixelOf(b), boardToPixel.apply(moved))
+        val events = (0 until 4).flatMap { tracker.process(handAt(it)) } + (0 until 30).flatMap { look() }
+        assertTrue("scored $events", landed(events).isEmpty())
+        val move = events.filterIsInstance<TrackerEvent.DartMoved>().single()
+        assertEquals(BoardGeometry.hitAt(moved), move.hit)
+        assertEquals(3, tracker.darts)
+    }
+
+    @Test
+    fun aHandParkedOverADartForALongTimeDoesNotRemoveIt() {
+        val a = DartHit(20, Multiplier.TRIPLE)
+        val b = DartHit(19, Multiplier.SINGLE)
+        visible = listOf(pixelOf(a), pixelOf(b))
+        repeat(2) { look() }
+        visible = listOf(pixelOf(b))
+        val events = (0 until 40).flatMap { tracker.process(handAt(1)) }
+        assertTrue("events $events", events.none { it is TrackerEvent.DartsRemoved })
+        assertEquals(2, tracker.darts)
+    }
+
+    @Test
     fun aTipThatJittersAFewMillimetresIsStillTheSameDart() {
         val hit = DartHit(20, Multiplier.TRIPLE)
         visible = listOf(pixelOf(hit))

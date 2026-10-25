@@ -28,6 +28,26 @@ class GameSessionTest {
     }
 
     @Test
+    fun aDartMovedByAHandKeepsItsPlaceAndTakesTheNewScore() {
+        val s = session()
+        val from = com.opendarts.geometry.BoardGeometry.centreOf(s5)
+        val to = com.opendarts.geometry.BoardGeometry.centreOf(t20)
+        s.throwDart(t20, fromCamera = true, spot = spotA)
+        s.throwDart(s5, fromCamera = true, spot = from)
+        s.dartMoved(from, t20, to)
+        assertEquals(listOf(t20, t20), s.game!!.turnHits)
+        assertEquals(to, s.spotOf(1))
+    }
+
+    @Test
+    fun aDartTheCameraSawNowhereNearTheMovedOneIsLeftAlone() {
+        val s = session()
+        s.throwDart(s5, fromCamera = true, spot = com.opendarts.geometry.BoardGeometry.centreOf(s5))
+        s.dartMoved(Point(-100.0, -100.0), t20, Point(0.0, 100.0))
+        assertEquals(listOf(s5), s.game!!.turnHits)
+    }
+
+    @Test
     fun aPlainRemovalDoesNotReleaseTheSpot() {
         val s = session()
         s.throwDart(t20, fromCamera = true, spot = spotA)

@@ -43,6 +43,8 @@ data class MlTrackerConfig(
     val adoptLooks: Int = 15,
     /** After the camera moved, a known dart that is not back at its board position is the same dart if one is seen this close (mm) to where it was. */
     val reanchorMm: Double = 60.0,
+    /** A hand that rests on the board no longer moves, but it still covers the darts; they are kept for at most this many looks of that. */
+    val maxCoveredLooks: Int = 100,
 )
 
 /** A dart the tracker knew about, kept so a new tracker (the screen was rebuilt, the phone turned) carries on where the old one stopped. */
@@ -77,6 +79,7 @@ class MlDartTracker(
     private var adoptLooksLeft = 0
     private var movedLooks = 0
     private val reference = ChangeReference()
+    private var coveredLooks = 0
 
     var state = TrackerState.WAITING_FOR_BOARD
         private set
@@ -151,7 +154,7 @@ class MlDartTracker(
     /** One look at the board. [nowMillis] is the time of the look, used to tell a moving hand from a settled scene. */
     fun process(frame: ColorFrame, nowMillis: Long = looks * 450): List<TrackerEvent> {
         looks++
-        handInWay = scene.moved(frame, nowMillis)
+        handInWay = scene.moved(frame, nowMillis) || covered(frame)
         if (handInWay) lastHandLook = looks
         calmLooks = if (handInWay) 0 else calmLooks + 1
         val found = detect(frame, corners)
@@ -238,7 +241,20 @@ class MlDartTracker(
             }
         }
         for (candidate in arrived) {
-            if (darts >= config.maxDartsOnBoard) break
+            if (darts >= config.maxDartsOnBoard) {
+                // Three darts are on the board, so a new one cannot be: a hand moved one of them.
+                val moved = unseen.filter { it in known && !it.ignored && lastHandLook > it.seenAt }.minByOrNull { dist(it.board, candidate.board) }
+                if (moved != null && dist(moved.board, candidate.board) <= config.reanchorMm) {
+                    unseen.remove(moved)
+                    events += TrackerEvent.DartMoved(moved.board, boardToPixel?.apply(moved.board) ?: moved.pixel, BoardGeometry.hitAt(candidate.board), candidate.board, candidate.pixel)
+                    moved.board = candidate.board
+                    moved.pixel = candidate.pixel
+                    moved.misses = 0
+                    moved.seenAt = looks
+                    moved.rematched = true
+                }
+                continue
+            }
             known += Known(candidate.board, candidate.pixel, looks)
             if (adoptNext > 0) { adoptNext--; continue }
             events += TrackerEvent.DartLanded(BoardGeometry.hitAt(candidate.board), candidate.board, candidate.pixel)
@@ -268,6 +284,17 @@ class MlDartTracker(
             dart.rematched = true
         }
         lost.forEach { it.misses = 0 }
+    }
+
+    /**
+     * A hand that rests on the board is not "moving" any more, but it hides the darts under it, and the picture still differs a lot
+     * from the calm one from before. Darts that are not seen then have not been pulled out.
+     */
+    private fun covered(frame: ColorFrame): Boolean {
+        if (known.none { it.misses > 0 }) { coveredLooks = 0; return false }
+        val share = reference.compare(frame)?.share ?: 0.0
+        coveredLooks = if (share > config.handChangeShare) coveredLooks + 1 else 0
+        return coveredLooks in 1..config.maxCoveredLooks
     }
 
     /** A look without a usable board: keep the last fit for a while so a passing hand does not lose the game. */

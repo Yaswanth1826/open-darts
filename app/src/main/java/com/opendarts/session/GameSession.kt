@@ -15,6 +15,7 @@ import com.opendarts.game.engine.VisitCall
 import com.opendarts.game.model.DartHit
 import com.opendarts.geometry.Point
 import com.opendarts.vision.ml.RememberedDart
+import kotlin.math.hypot
 
 enum class CalloutKind { PLAIN, GOOD, BUST }
 
@@ -250,6 +251,16 @@ class GameSession : ViewModel() {
         changed()
         if (hit != null && added != null) scored(g, hit, added)
         return if (hit == null && lookBehind) spot else null
+    }
+
+    /** A hand moved the dart the camera saw at [from] to [to] (board mm): it keeps its place in the turn and takes the score of its new spot, unless the player corrected it. */
+    fun dartMoved(from: Point, hit: DartHit, to: Point) {
+        val g = game ?: return
+        val index = (0 until g.turnHits.size).filter { trace.spotOf(it) != null }.minByOrNull { hypot(trace.spotOf(it)!!.x - from.x, trace.spotOf(it)!!.y - from.y) } ?: return
+        val spot = trace.spotOf(index)!!
+        if (hypot(spot.x - from.x, spot.y - from.y) > 12.0 || g.turnHits[index] != com.opendarts.geometry.BoardGeometry.hitAt(spot)) return
+        editDart(index, hit)
+        trace.moved(index, to)
     }
 
     /** The next empty slot [slot] holds a dart that landed behind dart [front]: it scores the same, and the pair is remembered. */

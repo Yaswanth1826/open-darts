@@ -69,6 +69,7 @@ import com.opendarts.ui.theme.Condensed
 import com.opendarts.ui.theme.CondensedRegular
 import com.opendarts.ui.theme.Palette
 import com.opendarts.vision.TrackerEvent
+import kotlin.math.hypot
 import com.opendarts.vision.TrackerState
 
 @Composable
@@ -97,6 +98,11 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
             onEvent = { event ->
                 when (event) {
                     is TrackerEvent.DartLanded -> { markers.add(event.pixel); haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); session.throwDart(event.hit, fromCamera = true, spot = event.board) }
+                    is TrackerEvent.DartMoved -> {
+                        val at = markers.indices.minByOrNull { hypot(markers[it].x - event.fromPixel.x, markers[it].y - event.fromPixel.y) }
+                        if (at != null) markers[at] = event.pixel
+                        session.dartMoved(event.from, event.hit, event.board)
+                    }
                     is TrackerEvent.DartsRemoved -> {
                         while (markers.size > event.remaining && markers.isNotEmpty()) markers.removeAt(markers.lastIndex)
                         if (event.remaining == 0) { session.cameraDartsRemoved(); session.dartsPulled() }
@@ -271,7 +277,7 @@ private fun OverlayButton(enabled: Boolean = true, onClick: () -> Unit, content:
 @Composable
 private fun StatusPill(status: CameraStatus, message: String, debug: Boolean, modifier: Modifier) {
     val text = when (status.phase) {
-        CameraPhase.TRACKING -> if (status.moved) "Camera moved \u2013 checking the board, scores are kept" else if (status.handInWay) "Hand in the way \u2013 waiting" else when (status.tracker) {
+        CameraPhase.TRACKING -> if (status.moved) "Camera moved \u2013 checking the board, scores are kept" else if (status.handInWay) "Hand on the board \u2013 adjust the darts, scores are kept" else when (status.tracker) {
             TrackerState.WAITING_FOR_BOARD -> "Scanning the empty board \u2013 keep hands clear"
             TrackerState.MOVING -> "Detecting\u2026"
             TrackerState.SETTLING -> "Hold on\u2026"
