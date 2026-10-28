@@ -100,7 +100,7 @@ class View:
             self.zoom = 1.0
             self.centre = (self.photo.image.shape[1] / 2, self.photo.image.shape[0] / 2)
 
-    def render(self, index, total, pending_corner=None):
+    def render(self, index, total, pending_corner=None, done_before=0):
         s = self.scale
         m = np.float32([[s, 0, self.w / 2 - self.centre[0] * s], [0, s, self.h / 2 - self.centre[1] * s]])
         canvas = cv2.warpAffine(self.photo.image, m, (self.w, self.h), flags=cv2.INTER_AREA if s < 1 else cv2.INTER_LINEAR)
@@ -127,7 +127,7 @@ class View:
                 cv2.drawMarker(canvas, (x, y), BLUE, cv2.MARKER_DIAMOND, 22, 2, cv2.LINE_AA)
         status = "set corner %d: click it" % pending_corner if pending_corner else \
             "%d darts   LMB add tip   RMB remove   z zoom   1-4 corner   SPACE next   b back   x skip   u undo   q quit" % len(p.darts)
-        title = "%d/%d  %s  [%s]%s" % (index + 1, total, os.path.basename(p.path), p.note, "  checked" if p.checked else "")
+        title = "%d/%d this session (%d already saved earlier)  %s  [%s]%s" % (index + 1, total, done_before, os.path.basename(p.path), p.note, "  checked" if p.checked else "")
         lines = [title, status]
         if fix:
             lines.append("PLAYER FIX: camera said '%s', the player says '%s'. Orange ring = where the camera saw it, blue diamond = middle of the area the player named. The red circle starts at that diamond: right-click it and click the real tip instead." % (fix.get("was") or "nothing", fix.get("now") or "no dart"))
@@ -153,6 +153,9 @@ def main():
     parser.add_argument("--darts-over", type=int, default=None, help="only the checked photos with more than this many dart marks (3 is a good check: at most three darts are on the board, plus any stuck outside the doubles)")
     args = parser.parse_args()
     paths = [p for p in photos_in(args.folder) if args.all or not os.path.exists(labels_path(p))]
+    done_before = sum(os.path.exists(labels_path(p)) for p in photos_in(args.folder))
+    if done_before and not args.all and args.darts_over is None:
+        print("%d photos are already labelled and saved; continuing with the %d that are left." % (done_before, len(paths)))
     if args.darts_over is not None:
         paths = [p for p in photos_in(args.folder) if os.path.exists(labels_path(p)) and len(json.load(open(labels_path(p))).get("darts", [])) > args.darts_over]
     paths.sort(key=lambda p: "-fix" not in os.path.basename(p))
@@ -188,7 +191,7 @@ def main():
     open_photo(0)
     while True:
         view = state["view"]
-        cv2.imshow("labels", view.render(state["i"], len(paths), state["pending"]))
+        cv2.imshow("labels", view.render(state["i"], len(paths), state["pending"], done_before))
         key = cv2.waitKey(30) & 0xFF
         photo = view.photo
         if key in (ord("q"), 27):
