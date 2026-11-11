@@ -34,7 +34,7 @@ CAL_SCORE = 0.3
 MM_TO_FLAT = FLAT_SCALE * SIZE / 170.0
 SECTORS = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5]
 MATCH_MM = 25.0
-IGNORE_BEYOND_MM = 176.0  # the app ignores marks this far from the bull
+IGNORE_BEYOND_MM = 205.0  # the app ignores marks this far from the bull
 
 
 class Net:

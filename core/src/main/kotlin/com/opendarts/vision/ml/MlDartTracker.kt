@@ -21,7 +21,7 @@ data class MlTrackerConfig(
     /** Detections closer than this (mm on the board) are the same dart. Two real tips cannot be closer than a barrel width (about 7 mm), so a hidden dart that shows up beside another one is a new dart. */
     val sameDartMm: Double = 8.0,
     /** Detections further than this from the bull are not darts in the board (the bezel, the logo, a hand), so they never count as a miss. */
-    val ignoreBeyondMm: Double = 176.0,
+    val ignoreBeyondMm: Double = 205.0,
     val maxDartsOnBoard: Int = 3,
     /** Corner positions are blended with the previous ones unless they jump by more than this share of the frame diagonal. */
     val smoothing: Double = 0.4,
