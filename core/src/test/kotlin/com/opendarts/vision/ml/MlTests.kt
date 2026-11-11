@@ -606,7 +606,7 @@ class MlDartTrackerTest {
             looksUntilGone++
             gone = look().any { it is TrackerEvent.DartsRemoved && it.remaining == 0 }
         }
-        assertTrue("took $looksUntilGone looks", gone && looksUntilGone <= 5)
+        assertTrue("took $looksUntilGone looks", gone && looksUntilGone <= 4)
     }
 
     @Test

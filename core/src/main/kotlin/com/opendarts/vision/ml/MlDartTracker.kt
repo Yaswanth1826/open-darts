@@ -14,6 +14,8 @@ data class MlTrackerConfig(
     val confirmLooksWithHand: Int = 3,
     /** A known dart that is not seen for this many consecutive looks, after a hand has been in front of the board, has been pulled out. */
     val removeAfterMisses: Int = 3,
+    /** When every dart that was known is gone at once (and a hand has been about) the board has been emptied: that is certain much sooner than a single missing dart. */
+    val removeAllAfterMisses: Int = 2,
     /** Nobody pulls a dart without a hand reaching in. A dart that vanishes with no hand about is the network losing it, so it is only given up after this many looks. */
     val removeAfterMissesNoHand: Int = 16,
     /** A dart that is no longer seen where it was, with no hand about, and a detection this close to it (mm): the tip is read a little differently, it is still the same dart. */
@@ -232,8 +234,10 @@ class MlDartTracker(
         val arrived = confirmed.sortedBy { it.born }.toMutableList()
         if (closing) reanchor(arrived)
         if (calmLooks >= config.calmLooksToRemove && graceLooks == 0) {
+            val boardEmptied = known.isNotEmpty() && known.all { it.misses > 0 }
+            val afterHand = if (boardEmptied) config.removeAllAfterMisses else config.removeAfterMisses
             known.removeAll {
-                val limit = if (lastHandLook > it.seenAt) config.removeAfterMisses else config.removeAfterMissesNoHand
+                val limit = if (lastHandLook > it.seenAt) afterHand else config.removeAfterMissesNoHand
                 (it.misses >= limit).also { gone -> if (gone && !it.ignored) removed++ }
             }
         }

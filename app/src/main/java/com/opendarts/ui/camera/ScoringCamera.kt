@@ -124,8 +124,11 @@ class ScoringCamera(
     /** Saves the latest frame now (for example when a dart was misread). */
     fun saveFrame(label: String, onSaved: (String) -> Unit) {
         val frame = lastFrame
+        val colour = lastColor
         if (frame == null || capture == null) { onSaved(""); return }
-        capture.save(frame.gray, label, mlTracker?.boardToPixel?.takeIf { mlActive } ?: fit, emptyList(), lastColor) { name -> main.post { onSaved(name) } }
+        // The grey picture is not built while the AI looks, and the camera has already taken the frame back: use the colour copy.
+        val grey = if (mlActive && colour != null) com.opendarts.vision.GrayFrame(colour.width, colour.height, com.opendarts.vision.ml.YuvConvert.grey(colour)) else frame.gray
+        capture.save(grey, label, mlTracker?.boardToPixel?.takeIf { mlActive } ?: fit, emptyList(), lastColor) { name -> main.post { onSaved(name) } }
     }
 
     /** The next calm frame is taken as the empty board. */

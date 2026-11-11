@@ -22,6 +22,8 @@ class TfliteDartNet private constructor(private val interpreter: Interpreter) : 
     private val input = ByteBuffer.allocateDirect(inputSize * inputSize * 3 * 4).order(ByteOrder.nativeOrder())
     private val output = ByteBuffer.allocateDirect(outputShape.fold(1) { a, b -> a * b } * 4).order(ByteOrder.nativeOrder())
 
+    private val scratch = FloatArray(inputSize * inputSize * 3)
+
     @Volatile private var closed = false
 
     @Synchronized
@@ -29,21 +31,22 @@ class TfliteDartNet private constructor(private val interpreter: Interpreter) : 
         if (closed) return emptyList()
         require(image.width == inputSize && image.height == inputSize)
         input.rewind()
-        val floats = input.asFloatBuffer()
         val rgb = image.rgb
+        val values = scratch
         if (channelsFirst) {
             val plane = inputSize * inputSize
-            for (c in 0 until 3) for (i in 0 until plane) floats.put((rgb[i * 3 + c].toInt() and 0xFF) / 255f)
+            for (c in 0 until 3) for (i in 0 until plane) values[c * plane + i] = LUT[rgb[i * 3 + c].toInt() and 0xFF]
         } else {
-            for (i in rgb.indices) floats.put((rgb[i].toInt() and 0xFF) / 255f)
+            for (i in rgb.indices) values[i] = LUT[rgb[i].toInt() and 0xFF]
         }
+        input.asFloatBuffer().put(values)
         output.rewind()
         interpreter.run(input, output)
         output.rewind()
-        val values = FloatArray(output.capacity() / 4)
-        output.asFloatBuffer().get(values)
+        val result = FloatArray(output.capacity() / 4)
+        output.asFloatBuffer().get(result)
         val dims = outputShape.filter { it > 1 }
-        return YoloDecoder.decode(values, dims[0], dims[1], inputSize)
+        return YoloDecoder.decode(result, dims[0], dims[1], inputSize)
     }
 
     /** Waits for a running look to finish, so the interpreter is never freed while it is in use. */
@@ -56,6 +59,7 @@ class TfliteDartNet private constructor(private val interpreter: Interpreter) : 
 
     companion object {
         const val ASSET = "dartnet.tflite"
+        private val LUT = FloatArray(256) { it / 255f }
 
         /** The loaded model, or null when the model file is not in the app or cannot be loaded. */
         fun loadOrNull(context: Context): TfliteDartNet? = runCatching {

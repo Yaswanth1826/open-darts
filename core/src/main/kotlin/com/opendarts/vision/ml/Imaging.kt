@@ -33,10 +33,18 @@ class ColorFrame(val width: Int, val height: Int, val rgb: ByteArray) {
      */
     fun warp(outToFrame: Homography, outSize: Int): ColorFrame {
         val out = ByteArray(outSize * outSize * 3)
+        val m = outToFrame.matrix
+        var o = 0
         for (oy in 0 until outSize) {
+            val y = oy + 0.5
+            val rowX = m[1] * y + m[2]
+            val rowY = m[4] * y + m[5]
+            val rowW = m[7] * y + m[8]
             for (ox in 0 until outSize) {
-                val src = outToFrame.apply(ox + 0.5, oy + 0.5)
-                sample(src.x - 0.5, src.y - 0.5, out, (oy * outSize + ox) * 3)
+                val x = ox + 0.5
+                val w = m[6] * x + rowW
+                sample((m[0] * x + rowX) / w - 0.5, (m[3] * x + rowY) / w - 0.5, out, o)
+                o += 3
             }
         }
         return ColorFrame(outSize, outSize, out)
@@ -51,6 +59,17 @@ class ColorFrame(val width: Int, val height: Int, val rgb: ByteArray) {
         val iy = Math.floor(sy).toInt()
         val fx = sx - ix
         val fy = sy - iy
+        if (ix >= 0 && iy >= 0 && ix + 1 < width && iy + 1 < height) {
+            val p00 = (iy * width + ix) * 3
+            val p01 = p00 + width * 3
+            for (c in 0 until 3) {
+                val v00 = rgb[p00 + c].toInt() and 0xFF; val v10 = rgb[p00 + 3 + c].toInt() and 0xFF
+                val v01 = rgb[p01 + c].toInt() and 0xFF; val v11 = rgb[p01 + 3 + c].toInt() and 0xFF
+                val v = (v00 * (1 - fx) + v10 * fx) * (1 - fy) + (v01 * (1 - fx) + v11 * fx) * fy
+                out[o + c] = (v + 0.5).toInt().toByte()
+            }
+            return
+        }
         for (c in 0 until 3) {
             val v00 = at(ix, iy, c); val v10 = at(ix + 1, iy, c)
             val v01 = at(ix, iy + 1, c); val v11 = at(ix + 1, iy + 1, c)

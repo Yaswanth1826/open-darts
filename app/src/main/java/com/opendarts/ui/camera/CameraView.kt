@@ -100,7 +100,7 @@ fun CameraView(
             analysisUseCase = analysis
             analysis.setAnalyzer(executor) { image: ImageProxy ->
                 try {
-                    frameCallback?.let { callback -> callback(CameraFrame(image.toUprightGray()) { image.toUprightColor() }) }
+                    frameCallback?.let { callback -> callback(CameraFrame({ image.toUprightGray() }) { image.toUprightColor() }) }
                 } catch (e: Exception) {
                     android.util.Log.w("CameraView", "frame skipped", e)
                 } finally {
