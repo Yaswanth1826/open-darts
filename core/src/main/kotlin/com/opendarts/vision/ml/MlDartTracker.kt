@@ -250,7 +250,7 @@ class MlDartTracker(
                 if (moved == null) continue
                 unseen.remove(moved)
                 if (dist(moved.board, candidate.board) <= config.reanchorMm) {
-                    events += TrackerEvent.DartMoved(moved.board, boardToPixel?.apply(moved.board) ?: moved.pixel, BoardGeometry.hitAt(candidate.board), candidate.board, candidate.pixel)
+                    events += TrackerEvent.DartMoved(moved.board, boardToPixel?.apply(moved.board) ?: moved.pixel, BoardGeometry.hitInPicture(candidate.board), candidate.board, candidate.pixel)
                     moved.board = candidate.board
                     moved.pixel = candidate.pixel
                     moved.misses = 0
@@ -263,7 +263,7 @@ class MlDartTracker(
             }
             known += Known(candidate.board, candidate.pixel, looks)
             if (adoptNext > 0) { adoptNext--; continue }
-            events += TrackerEvent.DartLanded(BoardGeometry.hitAt(candidate.board), candidate.board, candidate.pixel)
+            events += TrackerEvent.DartLanded(BoardGeometry.hitInPicture(candidate.board), candidate.board, candidate.pixel)
         }
 
         if (removed > 0) events += TrackerEvent.DartsRemoved(darts)

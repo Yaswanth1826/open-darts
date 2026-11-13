@@ -48,4 +48,16 @@ class GeometryTest {
         assertEquals(Math.sin(Math.toRadians(9.0)) * 170.0, p[0].x, 1e-9)
         assertEquals(Math.cos(Math.toRadians(9.0)) * 170.0, p[0].y, 1e-9)
     }
+
+    @Test fun theTrebleRingIsFoundWhereTheCameraSeesIt() {
+        assertEquals(DartHit.treble(20), BoardGeometry.hitInPicture(Point(0.0, 97.5)))
+        assertEquals(DartHit.treble(20), BoardGeometry.hitInPicture(Point(0.0, 104.5)))
+        assertEquals(DartHit.single(20), BoardGeometry.hitInPicture(Point(0.0, 96.0)))
+        assertEquals(DartHit.single(20), BoardGeometry.hitInPicture(Point(0.0, 106.0)))
+        assertEquals(DartHit.double(6), BoardGeometry.hitInPicture(Point(166.0, 0.0)))
+        assertEquals(DartHit.single(6), BoardGeometry.hitInPicture(Point(160.0, 0.0)))
+        assertEquals(DartHit.MISS, BoardGeometry.hitInPicture(Point(171.0, 0.0)))
+        assertEquals(DartHit.INNER_BULL, BoardGeometry.hitInPicture(Point(1.0, 1.0)))
+        assertEquals(DartHit.OUTER_BULL, BoardGeometry.hitInPicture(Point(0.0, 12.0)))
+    }
 }

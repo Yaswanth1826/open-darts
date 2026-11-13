@@ -103,6 +103,6 @@ class DebugCapture(private val context: Context) {
 
     private companion object {
         /** Board radii in mm: bull, outer bull, treble inner/outer, double inner/outer. */
-        val RINGS = listOf(6.35, 15.9, 99.0, 107.0, 162.0, 170.0)
+        val RINGS = listOf(6.35, 15.9, 97.0, 105.0, 162.0, 170.0)
     }
 }

@@ -23,6 +23,14 @@ object BoardGeometry {
     const val DOUBLE_INNER_RADIUS = 162.0
     const val DOUBLE_OUTER_RADIUS = 170.0
 
+    /**
+     * Where the treble ring really is in a picture flattened with the four corners on the outer double edge. The ring is
+     * about 2 mm closer to the bull than the regulation 99-107 mm: measured on 120 labelled photos (band 96-105 mm) and on
+     * 40 trebles the player confirmed (95% between 97 and 105 mm, only 75% between 99 and 107 mm).
+     */
+    const val SEEN_TREBLE_INNER_RADIUS = 97.0
+    const val SEEN_TREBLE_OUTER_RADIUS = 105.0
+
     /** Segment numbers clockwise starting from the top. */
     val SEGMENT_ORDER = intArrayOf(20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5)
 
@@ -45,6 +53,22 @@ object BoardGeometry {
     }
 
     fun hitAt(p: Point) = hitAt(p.x, p.y)
+
+    /** The score of a dart tip at [p] on the board as seen in the camera picture: the treble ring is moved to where it really is. */
+    fun hitInPicture(p: Point): DartHit {
+        val r = hypot(p.x, p.y)
+        if (r < 1e-9) return hitAt(p)
+        val k = regulationRadius(r) / r
+        return hitAt(p.x * k, p.y * k)
+    }
+
+    private fun regulationRadius(r: Double): Double = when {
+        r <= OUTER_BULL_RADIUS -> r
+        r <= SEEN_TREBLE_INNER_RADIUS -> OUTER_BULL_RADIUS + (r - OUTER_BULL_RADIUS) * (TREBLE_INNER_RADIUS - OUTER_BULL_RADIUS) / (SEEN_TREBLE_INNER_RADIUS - OUTER_BULL_RADIUS)
+        r <= SEEN_TREBLE_OUTER_RADIUS -> TREBLE_INNER_RADIUS + (r - SEEN_TREBLE_INNER_RADIUS)
+        r <= DOUBLE_OUTER_RADIUS -> TREBLE_OUTER_RADIUS + (r - SEEN_TREBLE_OUTER_RADIUS) * (DOUBLE_OUTER_RADIUS - TREBLE_OUTER_RADIUS) / (DOUBLE_OUTER_RADIUS - SEEN_TREBLE_OUTER_RADIUS)
+        else -> r
+    }
 
     /** Millimetre position of the middle of a scoring area; used for drawing and tests. */
     fun centreOf(hit: DartHit): Point {

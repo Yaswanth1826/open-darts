@@ -258,7 +258,7 @@ class GameSession : ViewModel() {
         val g = game ?: return
         val index = (0 until g.turnHits.size).filter { trace.spotOf(it) != null }.minByOrNull { hypot(trace.spotOf(it)!!.x - from.x, trace.spotOf(it)!!.y - from.y) } ?: return
         val spot = trace.spotOf(index)!!
-        if (hypot(spot.x - from.x, spot.y - from.y) > 12.0 || g.turnHits[index] != com.opendarts.geometry.BoardGeometry.hitAt(spot)) return
+        if (hypot(spot.x - from.x, spot.y - from.y) > 12.0 || g.turnHits[index] != com.opendarts.geometry.BoardGeometry.hitInPicture(spot)) return
         editDart(index, hit)
         trace.moved(index, to)
     }

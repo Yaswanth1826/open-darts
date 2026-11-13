@@ -39,8 +39,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBoard(ready: Bo
         listOf(
             BoardGeometry.DOUBLE_OUTER_RADIUS to 3f,
             BoardGeometry.DOUBLE_INNER_RADIUS to 1.5f,
-            BoardGeometry.TREBLE_OUTER_RADIUS to 1.5f,
-            BoardGeometry.TREBLE_INNER_RADIUS to 1.5f,
+            BoardGeometry.SEEN_TREBLE_OUTER_RADIUS to 1.5f,
+            BoardGeometry.SEEN_TREBLE_INNER_RADIUS to 1.5f,
             BoardGeometry.OUTER_BULL_RADIUS to 1.5f,
         ).forEach { (radius, width) ->
             val pts = BoardGeometry.outline(radius, 96).map(toView)

@@ -25,7 +25,7 @@ import numpy as np
 from from_captures import FLAT_SCALE, SIZE, flat_corners, labels_path, load_meta, photos_in
 
 WINDOW = (1500, 900)
-RING_RADII_MM = [6.35, 15.9, 99.0, 107.0, 162.0, 170.0]
+RING_RADII_MM = [6.35, 15.9, 97.0, 105.0, 162.0, 170.0]  # the treble ring sits about 2 mm inside the regulation 99-107
 GREEN = (118, 230, 0)
 RED = (40, 40, 255)
 YELLOW = (0, 220, 255)

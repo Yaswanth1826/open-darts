@@ -194,7 +194,7 @@ def score_of(x, y):
     if r > 170:
         return "miss"
     number = SECTORS[int(((math.degrees(math.atan2(x, -y)) + 9) % 360) // 18)]
-    if 99 <= r <= 107:
+    if 97 <= r <= 105:  # as BoardGeometry.hitInPicture: the treble ring sits about 2 mm inside the regulation 99-107
         return "T%d" % number
     if r >= 162:
         return "D%d" % number
