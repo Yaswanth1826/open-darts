@@ -120,7 +120,12 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
         }
     }
     DisposableEffect(camera) {
-        session.onForget = camera::ignoreSpot
+        session.onForget = { spot ->
+            camera.ignoreSpot(spot)
+            val pixel = camera.pixelOf(spot)
+            val dot = if (pixel == null) null else markers.indices.minByOrNull { hypot(markers[it].x - pixel.x, markers[it].y - pixel.y) }
+            if (dot != null) markers.removeAt(dot)
+        }
         onDispose {
             if (session.game != null && session.setup.input == InputMode.CAMERA) session.cameraMemory = camera.remembered()
             session.onForget = null
@@ -185,16 +190,15 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     if (tips) SetupTipsDialog { tips = false }
     editing?.let { slot ->
         DartEditor(
-            slot, game.turnHits.getOrNull(slot), front = game.turnHits.take(slot), canLookBehind = session.canLookBehind(slot),
+            slot, game.turnHits.getOrNull(slot), front = game.turnHits.take(slot),
             onPick = {
                 val was = game.turnHits.getOrNull(slot)
                 val seenAt = session.spotOf(slot)
                 session.editDart(slot, it)
-                if (it == null && seenAt != null) camera.ignoreSpot(seenAt)
                 if (was != it) camera.saveCorrection(was, it, seenAt)
             },
             onBehind = { session.dartBehind(slot, it) },
-            onLookBehind = { session.editDart(slot, null, lookBehind = true)?.let(camera::releaseSpot) }, onDismiss = { editing = null },
+            onDismiss = { editing = null },
         )
     }
     saved?.let { msg ->

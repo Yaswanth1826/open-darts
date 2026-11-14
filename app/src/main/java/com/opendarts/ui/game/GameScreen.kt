@@ -241,8 +241,8 @@ private fun ManualGame(session: GameSession, game: DartGame<*>, onExit: () -> Un
     }
     editing?.let { slot ->
         DartEditor(
-            slot, game.turnHits.getOrNull(slot), front = game.turnHits.take(slot), canLookBehind = false,
-            onPick = { session.editDart(slot, it) }, onBehind = { session.dartBehind(slot, it) }, onLookBehind = {}, onDismiss = { editing = null },
+            slot, game.turnHits.getOrNull(slot), front = game.turnHits.take(slot),
+            onPick = { session.editDart(slot, it) }, onBehind = { session.dartBehind(slot, it) }, onDismiss = { editing = null },
         )
     }
 }

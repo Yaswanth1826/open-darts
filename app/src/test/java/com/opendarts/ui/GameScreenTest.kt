@@ -1,10 +1,11 @@
-﻿package com.opendarts.ui
+package com.opendarts.ui
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.core.view.drawToBitmap
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.opendarts.session.GameKind
@@ -70,19 +71,6 @@ class GameScreenTest {
     fun cameraScreenFollowsTheGameLandscape() = camera("camera-landscape")
 
     @Test @Config(qualifiers = "w700dp-h360dp-land-xxhdpi")
-    fun editorOffersTheHiddenDartOptions() {
-        val session = GameSession().also { it.start(GameSetup(input = InputMode.CAMERA)) }
-        rule.setContent { OpenDartsTheme { GameScreen(session, onExit = {}, onCalibrate = {}) } }
-        rule.runOnIdle { session.throwDart(com.opendarts.game.model.DartHit(20, com.opendarts.game.model.Multiplier.TRIPLE), fromCamera = true, spot = com.opendarts.geometry.Point(0.0, 100.0)) }
-        rule.waitForIdle()
-        rule.onNodeWithText("T-20").performClick()
-        rule.onNodeWithText("Remove \u2013 a dart is behind it").assertExists().performClick()
-        rule.waitForIdle()
-        check(session.game!!.turnHits.isEmpty()) { "dart was not removed" }
-
-    }
-
-    @Test @Config(qualifiers = "w700dp-h360dp-land-xxhdpi")
     fun tappingADartOpensTheScorePadAndOneMoreTapChangesIt() {
         val session = GameSession().also { it.start(GameSetup(input = InputMode.CAMERA)) }
         rule.setContent { OpenDartsTheme { GameScreen(session, onExit = {}, onCalibrate = {}) } }
@@ -91,7 +79,8 @@ class GameScreenTest {
         rule.waitForIdle()
         rule.onNodeWithText("T-20").performClick()
         rule.waitForIdle()
-        for (label in listOf("Triple", "Miss", "Bull", "Remove dart")) check(rule.onAllNodesWithText(label).fetchSemanticsNodes().isNotEmpty()) { "$label missing" }
+        for (label in listOf("Triple", "Miss", "Bull")) check(rule.onAllNodesWithText(label).fetchSemanticsNodes().isNotEmpty()) { "$label missing" }
+        rule.onNodeWithContentDescription("Remove dart").assertExists()
         rule.onAllNodesWithText("5").onFirst().performClick()
         rule.waitForIdle()
         check(session.game!!.turnHits == listOf(com.opendarts.game.model.DartHit(5, com.opendarts.game.model.Multiplier.TRIPLE))) { "dart was not changed: ${session.game!!.turnHits}" }
@@ -104,7 +93,7 @@ class GameScreenTest {
         rule.runOnIdle { session.throwDart(com.opendarts.game.model.DartHit(20, com.opendarts.game.model.Multiplier.TRIPLE), fromCamera = true) }
         rule.waitForIdle()
         rule.onNodeWithText("T-20").performClick()
-        rule.onNodeWithText("Remove dart").performClick()
+        rule.onNodeWithContentDescription("Remove dart").performClick()
         rule.waitForIdle()
         check(session.game!!.turnHits.isEmpty()) { "dart was not removed" }
     }

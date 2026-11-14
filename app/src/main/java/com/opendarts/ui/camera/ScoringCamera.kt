@@ -175,12 +175,8 @@ class ScoringCamera(
         remembered = earlier
     }
 
-    private val releases = java.util.concurrent.ConcurrentLinkedQueue<Point>()
-
-    /** A dart at [board] (millimetres) was taken out by the player because another is hiding behind it: score what is still seen there. */
-    fun releaseSpot(board: Point) {
-        releases.add(board)
-    }
+    /** Where the board point [board] (millimetres) is in the camera picture, or null while the board is not found. */
+    fun pixelOf(board: Point): Point? = mlTracker?.boardToPixel?.apply(board)
 
     private val ignores = java.util.concurrent.ConcurrentLinkedQueue<Point>()
 
@@ -267,7 +263,6 @@ class ScoringCamera(
         frameSize = colour.width to colour.height
         resetRequested.set(false)
         startRequested.set(false)
-        while (true) tracker.releaseAt(releases.poll() ?: break)
         while (true) tracker.ignoreAt(ignores.poll() ?: break)
         val events = tracker.process(colour, now)
         lastCorners = tracker.cornerPixels

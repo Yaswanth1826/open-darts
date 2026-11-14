@@ -220,16 +220,12 @@ class GameSession : ViewModel() {
     /** Where on the board (mm) the camera saw dart [index] of the turn on screen, or null if it was not seen by the camera. */
     fun spotOf(index: Int): Point? = trace.spotOf(index)
 
-    /** True when the camera saw dart [index] and nothing recorded as hidden sits behind it, so a look behind it makes sense. */
-    fun canLookBehind(index: Int): Boolean = trace.spotOf(index) != null && !trace.hasDartBehind(index)
-
     /**
-     * Sets dart [index] of the turn on screen to [hit], removes it ([hit] null), or adds it when it is the next empty slot.
-     * With [lookBehind] a removed camera dart also tells the camera to forget it; the spot is returned so the camera can
-     * score whatever dart is still visible there as a new one. Otherwise null.
+     * Sets dart [index] of the turn on screen to [hit], deletes it ([hit] null), or adds it when it is the next empty slot.
+     * A deleted camera dart is also forgotten by the camera, so it no longer counts towards the three on the board.
      */
-    fun editDart(index: Int, hit: DartHit?, lookBehind: Boolean = false): Point? {
-        val g = game ?: return null
+    fun editDart(index: Int, hit: DartHit?) {
+        val g = game ?: return
         val spot = trace.spotOf(index)
         var added: Outcome? = null
         val done = when {
@@ -239,18 +235,17 @@ class GameSession : ViewModel() {
             }
             else -> false
         }
-        if (!done) return null
+        if (!done) return
         if (hit == null) trace.removed(index)
         trace.sync(g.turnHits.size)
         message = when {
-            hit == null && lookBehind -> "Dart ${index + 1} removed \u2013 looking for a dart behind it"
             hit == null -> "Dart ${index + 1} removed"
             else -> "${g.currentPlayer.name}: dart ${index + 1} is ${hit.label}"
         }
         dismissedResult = false
         changed()
         if (hit != null && added != null) scored(g, hit, added)
-        return if (hit == null && lookBehind) spot else null
+        if (hit == null) spot?.let { onForget?.invoke(it) }
     }
 
     /** A hand moved the dart the camera saw at [from] to [to] (board mm): it keeps its place in the turn and takes the score of its new spot, unless the player corrected it. */

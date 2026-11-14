@@ -139,17 +139,6 @@ class MlDartTracker(
         return true
     }
 
-    /**
-     * The player says another dart is hiding behind the one at [board]: forget that dart, so whatever is still seen
-     * at the spot is scored as a new dart once it has been seen twice. Returns false if no dart was known there.
-     */
-    fun releaseAt(board: Point): Boolean {
-        val dart = known.minByOrNull { dist(it.board, board) }?.takeIf { dist(it.board, board) <= config.sameDartMm * 2 } ?: return false
-        known.remove(dart)
-        candidates.clear()
-        return true
-    }
-
     /** One look at the board. [nowMillis] is the time of the look, used to tell a moving hand from a settled scene. */
     fun process(frame: ColorFrame, nowMillis: Long = looks * 450): List<TrackerEvent> {
         looks++

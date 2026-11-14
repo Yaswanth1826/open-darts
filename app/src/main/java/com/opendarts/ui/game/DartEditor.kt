@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,9 +41,8 @@ import com.opendarts.ui.theme.Palette
 
 /**
  * One tap on a dart slot opens the score pad at once, for a dart that is there as well as for the next empty slot: one more
- * tap picks the score. A dart that is there can also be removed from the pad. [onPick] gets the new score, or null to remove the dart.
- * A dart the camera could not see because it sits behind another one is added with [onBehind] (index of the front dart);
- * when the front dart is removed, [onLookBehind] asks the camera to score whatever dart is still visible there.
+ * tap picks the score. A dart that is there can also be deleted with the bin icon. [onPick] gets the new score, or null to delete the dart.
+ * A dart the camera could not see because it sits behind another one is added with [onBehind] (index of the front dart).
  *
  * The score pad adapts to the room: on a wide screen all twenty numbers sit in two rows beside the multipliers, so nothing scrolls.
  */
@@ -49,10 +51,8 @@ fun DartEditor(
     slot: Int,
     current: DartHit?,
     front: List<DartHit>,
-    canLookBehind: Boolean,
     onPick: (DartHit?) -> Unit,
     onBehind: (Int) -> Unit,
-    onLookBehind: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var multiplier by remember { mutableStateOf(current?.multiplier?.takeIf { current.base in 1..20 } ?: Multiplier.SINGLE) }
@@ -72,6 +72,11 @@ fun DartEditor(
                         if (current == null) "Dart ${slot + 1}: enter score" else "Dart ${slot + 1}: ${current.label} \u2013 pick the right score",
                         color = Palette.Ink, fontFamily = Condensed, fontSize = 22.sp, modifier = Modifier.weight(1f),
                     )
+                    if (current != null) {
+                        Box(Modifier.clip(RoundedCornerShape(8.dp)).clickable { done(null) }.padding(8.dp)) {
+                            Icon(Icons.Default.Delete, "Remove dart", tint = Palette.Red)
+                        }
+                    }
                     Text("CANCEL", color = Palette.Ink.copy(alpha = 0.6f), fontFamily = Condensed, fontSize = 16.sp, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onDismiss).padding(8.dp))
                 }
                 run {
@@ -110,12 +115,6 @@ fun DartEditor(
                         }
                     }
                     if (!wide) specials(Modifier)
-                    if (current != null) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Key("Remove dart", Modifier.weight(1f), key, Palette.Red.copy(alpha = 0.18f), 17) { done(null) }
-                            if (canLookBehind) Key("Remove \u2013 a dart is behind it", Modifier.weight(1.6f), key, Palette.Red.copy(alpha = 0.18f), 17) { onLookBehind(); onDismiss() }
-                        }
-                    }
                 }
             }
         }
