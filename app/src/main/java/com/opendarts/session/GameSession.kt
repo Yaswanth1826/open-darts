@@ -248,6 +248,20 @@ class GameSession : ViewModel() {
         if (hit == null) spot?.let { onForget?.invoke(it) }
     }
 
+    /** Takes the player at [index] out of the game for good (their darts and score go with them); if it was their turn the next player is up. */
+    fun removePlayer(index: Int) {
+        val g = game ?: return
+        val name = g.players.getOrNull(index)?.name ?: return
+        val wasCurrent = g.currentPlayerIndex == index
+        if (!g.removePlayer(index)) return
+        log.add(GameAction.Remove(index))
+        if (wasCurrent) turnEndedEarly = false
+        trace.sync(g.turnHits.size)
+        message = if (wasCurrent) "$name removed \u2013 ${g.currentPlayer.name} to throw" else "$name removed"
+        dismissedResult = false
+        changed()
+    }
+
     /** A hand moved the dart the camera saw at [from] to [to] (board mm): it keeps its place in the turn and takes the score of its new spot, unless the player corrected it. */
     fun dartMoved(from: Point, hit: DartHit, to: Point) {
         val g = game ?: return

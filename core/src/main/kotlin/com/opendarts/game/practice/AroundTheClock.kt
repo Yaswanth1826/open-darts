@@ -21,6 +21,8 @@ class AroundTheClockGame(players: List<Player>, val config: AroundTheClockConfig
     DartGame<ClockState>(players) {
     override fun initialState() = ClockState(players.map { 1 })
 
+    override fun withoutPlayer(state: ClockState, index: Int) = ClockState(state.targets.filterIndexed { i, _ -> i != index })
+
     fun targetNumber(index: Int): Int = if (index >= CLOCK_BULL_INDEX) 25 else index
 
     override fun onThrow(state: ClockState, player: Int, hit: DartHit, turnBefore: List<DartHit>, round: Int): StepResult<ClockState> {

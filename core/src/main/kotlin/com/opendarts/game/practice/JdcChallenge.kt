@@ -47,6 +47,8 @@ data class JdcState(val players: List<JdcPlayerState>)
 class JdcChallengeGame(players: List<Player>) : DartGame<JdcState>(players) {
     override fun initialState() = JdcState(players.map { JdcPlayerState() })
 
+    override fun withoutPlayer(state: JdcState, index: Int) = JdcState(state.players.filterIndexed { i, _ -> i != index })
+
     /** The target for the [dartIndex]-th dart (0-based) of the given round. */
     fun targetFor(round: Int, dartIndex: Int): JdcTarget = when (round) {
         in 1..6 -> JdcTarget(JdcPart.SHANGHAI_LOW, 9 + round, false)

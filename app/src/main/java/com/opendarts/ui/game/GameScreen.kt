@@ -264,6 +264,7 @@ fun GameTopBar(
     var menu by remember { mutableStateOf(false) }
     var board by remember { mutableStateOf(false) }
     var confirmQuit by remember { mutableStateOf(false) }
+    var removing by remember { mutableStateOf(false) }
     val camera = session.setup.input == InputMode.CAMERA
     val announcer = LocalAnnouncer.current
     val configuration = LocalConfiguration.current
@@ -277,6 +278,7 @@ fun GameTopBar(
                 DropdownMenuItem(text = { Text("Scoreboard") }, onClick = { menu = false; board = true })
                 DropdownMenuItem(text = { Text("Undo last dart") }, enabled = game.canUndo, onClick = { menu = false; session.undo() })
                 extraMenu { menu = false }
+                if (game.players.size > 1 && !game.isFinished) DropdownMenuItem(text = { Text("Remove a player") }, onClick = { menu = false; removing = true })
                 announcer?.let { DropdownMenuItem(text = { Text((if (it.enabled) "\u2713 " else "") + "Sound and spoken score") }, onClick = { menu = false; it.toggle() }) }
                 DropdownMenuItem(text = { Text("Quit game") }, onClick = { menu = false; if (game.canUndo && !game.isFinished) confirmQuit = true else onExit() })
             }
@@ -303,6 +305,21 @@ fun GameTopBar(
         } else {
             SquareButton(onClick = { board = true }, size = side) { Icon(Icons.AutoMirrored.Filled.List, "Scoreboard", tint = Palette.Ink) }
         }
+    }
+    if (removing) {
+        AlertDialog(
+            onDismissRequest = { removing = false },
+            title = { Text("Remove which player?") },
+            text = {
+                Column {
+                    game.players.forEachIndexed { i, player ->
+                        TextButton(onClick = { removing = false; session.removePlayer(i) }) { Text(player.name.uppercase() + if (i == game.currentPlayerIndex) "  (throwing now)" else "") }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { removing = false }) { Text("Cancel") } },
+        )
     }
     if (confirmQuit) {
         AlertDialog(

@@ -68,15 +68,15 @@ fun DartEditor(
         ) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (current != null) {
+                        Box(Modifier.padding(end = 6.dp).clip(RoundedCornerShape(8.dp)).clickable { done(null) }.padding(8.dp)) {
+                            Icon(Icons.Default.Delete, "Remove dart", tint = Palette.Red)
+                        }
+                    }
                     Text(
                         if (current == null) "Dart ${slot + 1}: enter score" else "Dart ${slot + 1}: ${current.label} \u2013 pick the right score",
                         color = Palette.Ink, fontFamily = Condensed, fontSize = 22.sp, modifier = Modifier.weight(1f),
                     )
-                    if (current != null) {
-                        Box(Modifier.clip(RoundedCornerShape(8.dp)).clickable { done(null) }.padding(8.dp)) {
-                            Icon(Icons.Default.Delete, "Remove dart", tint = Palette.Red)
-                        }
-                    }
                     Text("CANCEL", color = Palette.Ink.copy(alpha = 0.6f), fontFamily = Condensed, fontSize = 16.sp, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onDismiss).padding(8.dp))
                 }
                 run {

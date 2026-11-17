@@ -25,13 +25,20 @@ class AdvanceResult<S>(val state: S, val nextPlayer: Int? = null, val newRound: 
  * Turn flow: throwDart() until the turn is over (3 darts, bust, win...), then endTurn() moves to the
  * next player. Throwing a dart after the turn is over implicitly calls endTurn() first.
  */
-abstract class DartGame<S : Any>(val players: List<Player>, val dartsPerTurn: Int = 3) {
+abstract class DartGame<S : Any>(initialPlayers: List<Player>, val dartsPerTurn: Int = 3) {
+    /** The players still in the game; shrinks when [removePlayer] is used. */
+    var players: List<Player> = initialPlayers
+        private set
+
     init {
         require(players.isNotEmpty()) { "a game needs at least one player" }
         require(dartsPerTurn > 0) { "dartsPerTurn must be positive" }
     }
 
     protected abstract fun initialState(): S
+
+    /** [state] with player [index] taken out, every later player moving up one place. */
+    protected abstract fun withoutPlayer(state: S, index: Int): S
 
     /** Applies one dart. [turnBefore] holds the darts already thrown this turn by [player]. */
     protected abstract fun onThrow(state: S, player: Int, hit: DartHit, turnBefore: List<DartHit>, round: Int): StepResult<S>
@@ -97,10 +104,12 @@ abstract class DartGame<S : Any>(val players: List<Player>, val dartsPerTurn: In
     }
 
     /** Ends the current turn (early if fewer darts were thrown) and hands over to the next player. */
-    fun endTurn() {
+    fun endTurn() = handOver(finaliseTurn = true)
+
+    private fun handOver(finaliseTurn: Boolean) {
         var snap = current()
         if (snap.winners != null) return
-        if (!snap.finalised) snap = finalise(snap.copy(turnOver = true))
+        if (!snap.finalised && finaliseTurn) snap = finalise(snap.copy(turnOver = true))
         if (snap.winners != null) {
             history += snap.copy(transition = true)
             return
@@ -113,6 +122,28 @@ abstract class DartGame<S : Any>(val players: List<Player>, val dartsPerTurn: In
         while (!isActive(state, next) && guard++ < n) next = (next + 1) % n
         val round = advanced.newRound ?: if (advanced.nextPlayer == null && next <= snap.player) snap.round + 1 else snap.round
         history += Snapshot(state, next, emptyList(), false, false, round, null, Outcome.SCORED, transition = true)
+    }
+
+    /**
+     * Takes player [index] out of the game, with all their darts and score. If it was their turn, play passes to the next player.
+     * Undo and the other players' scores carry on as if the player had never been in the game. Returns false when that is not
+     * possible (the game is over, or it would leave nobody).
+     */
+    fun removePlayer(index: Int): Boolean {
+        if (index !in players.indices || players.size < 2 || isFinished) return false
+        current()
+        var guard = 0
+        while (history.last().player == index && guard++ < players.size) handOver(finaliseTurn = history.last().turn.isNotEmpty())
+        if (history.last().player == index) return false
+        val shift = { p: Int -> if (p > index) p - 1 else p }
+        val kept = history.filter { it.player != index }.map {
+            it.copy(game = withoutPlayer(it.game, index), player = shift(it.player), winners = it.winners?.filter { w -> w != index }?.map(shift))
+        }
+        history.clear()
+        history += kept
+        history[0] = history[0].copy(transition = false)
+        players = players.filterIndexed { i, _ -> i != index }
+        return true
     }
 
     /** Removes the last dart (and any turn hand-over that followed it). */

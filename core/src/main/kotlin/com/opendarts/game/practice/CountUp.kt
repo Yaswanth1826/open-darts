@@ -17,6 +17,8 @@ data class CountUpState(val scores: List<Int>)
 class CountUpGame(players: List<Player>, val config: CountUpConfig = CountUpConfig()) : DartGame<CountUpState>(players) {
     override fun initialState() = CountUpState(players.map { 0 })
 
+    override fun withoutPlayer(state: CountUpState, index: Int) = CountUpState(state.scores.filterIndexed { i, _ -> i != index })
+
     override fun onThrow(state: CountUpState, player: Int, hit: DartHit, turnBefore: List<DartHit>, round: Int): StepResult<CountUpState> {
         val scores = state.scores.toMutableList().also { it[player] += hit.points }
         return StepResult(CountUpState(scores), if (hit.points > 0) Outcome.SCORED else Outcome.NO_SCORE)

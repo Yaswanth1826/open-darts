@@ -59,6 +59,16 @@ class X01Game(players: List<Player>, val config: X01Config = X01Config()) : Dart
 
     override fun initialState() = X01State(players.map { fresh() })
 
+    override fun withoutPlayer(state: X01State, index: Int): X01State {
+        val left = state.players.size - 1
+        val starter = when {
+            state.legStarter > index -> state.legStarter - 1
+            state.legStarter == index -> index % left
+            else -> state.legStarter
+        }
+        return state.copy(players = state.players.filterIndexed { i, _ -> i != index }, legStarter = starter)
+    }
+
     private fun fresh() = X01Player(config.startingScore, config.inMode == InOut.STRAIGHT)
 
     private fun counts(mode: InOut, hit: DartHit) = when (mode) {

@@ -69,6 +69,22 @@ class GameLogTest {
     }
 
     @Test
+    fun removingAPlayerIsReplayedAndSaved() {
+        val three = listOf(Player(0, "A"), Player(1, "B"), Player(2, "C"))
+        val log = GameLog(listOf(
+            GameAction.Throw(DartHit.treble(20)), GameAction.NextTurn, GameAction.Throw(DartHit.single(5)),
+            GameAction.Remove(1), GameAction.Throw(DartHit.single(1)), GameAction.Undo,
+        ))
+        val a = X01Game(three, X01Config(501)); log.replay(a)
+        val b = X01Game(three, X01Config(501)); GameLog.decode(log.encode())!!.replay(b)
+        assertEquals(listOf("A", "C"), a.players.map { it.name })
+        assertEquals(a.gameState, b.gameState)
+        assertEquals(a.currentPlayerIndex, b.currentPlayerIndex)
+        assertEquals(1, b.currentPlayerIndex)
+        assertEquals(441, b.gameState.players[0].remaining)
+    }
+
+    @Test
     fun damagedTextIsRejected() {
         assertNull(GameLog.decode("T,99.7"))
         assertNull(GameLog.decode("Q"))

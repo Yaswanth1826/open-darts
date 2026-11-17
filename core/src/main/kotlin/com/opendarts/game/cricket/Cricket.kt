@@ -23,6 +23,8 @@ val CRICKET_NUMBERS: List<Int> = listOf(20, 19, 18, 17, 16, 15, 25)
 class CricketGame(players: List<Player>, val config: CricketConfig = CricketConfig()) : DartGame<CricketState>(players) {
     override fun initialState() = CricketState(players.map { CricketPlayer() })
 
+    override fun withoutPlayer(state: CricketState, index: Int) = CricketState(state.players.filterIndexed { i, _ -> i != index })
+
     override fun onThrow(state: CricketState, player: Int, hit: DartHit, turnBefore: List<DartHit>, round: Int): StepResult<CricketState> {
         if (hit.base !in CRICKET_NUMBERS) return StepResult(state, Outcome.NO_SCORE)
 

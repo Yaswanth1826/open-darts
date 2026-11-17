@@ -13,6 +13,76 @@ class X01GameTest {
     private val two = listOf(Player(0, "A"), Player(1, "B"))
     private fun X01Game.remaining(i: Int) = gameState.players[i].remaining
 
+    private val three = listOf(Player(0, "A"), Player(1, "B"), Player(2, "C"))
+
+    private fun X01Game.visit(vararg hits: DartHit) { hits.forEach { throwDart(it) }; endTurn() }
+
+    @Test fun removingAPlayerWhoseTurnItIsPassesPlayToTheNextOne() {
+        val g = X01Game(three, X01Config(501))
+        g.visit(DartHit.treble(20), DartHit.treble(20), DartHit.treble(20))
+        g.throwDart(DartHit.single(20))
+        assertTrue(g.removePlayer(1))
+        assertEquals(listOf("A", "C"), g.players.map { it.name })
+        assertEquals("C", g.currentPlayer.name)
+        assertTrue(g.turnHits.isEmpty())
+        assertEquals(321, g.remaining(0))
+        assertEquals(501, g.remaining(1))
+        g.visit(DartHit.single(1), DartHit.single(1), DartHit.single(1))
+        assertEquals("A", g.currentPlayer.name)
+        assertEquals(2, g.round)
+    }
+
+    @Test fun removingAnotherPlayerLeavesTheTurnOnScreenAlone() {
+        val g = X01Game(three, X01Config(501))
+        g.visit(DartHit.single(1), DartHit.single(1), DartHit.single(1))
+        g.visit(DartHit.single(2), DartHit.single(2), DartHit.single(2))
+        g.throwDart(DartHit.treble(20)); g.throwDart(DartHit.treble(19))
+        assertTrue(g.removePlayer(0))
+        assertEquals("C", g.currentPlayer.name)
+        assertEquals(listOf(DartHit.treble(20), DartHit.treble(19)), g.turnHits)
+        assertEquals(1, g.currentPlayerIndex)
+        assertEquals(501 - 6, g.remaining(0))
+        assertEquals(501 - 117, g.remaining(1))
+        g.throwDart(DartHit.single(1))
+        g.visit()
+        assertEquals("B", g.currentPlayer.name)
+    }
+
+    @Test fun undoStillWorksAfterAPlayerWasRemoved() {
+        val g = X01Game(three, X01Config(501))
+        g.visit(DartHit.single(1), DartHit.single(1), DartHit.single(1))
+        g.visit(DartHit.single(2), DartHit.single(2), DartHit.single(2))
+        g.throwDart(DartHit.single(3))
+        g.removePlayer(1)
+        assertEquals(listOf(DartHit.single(3)), g.turnHits)
+        assertTrue(g.undo())
+        assertTrue(g.turnHits.isEmpty())
+        assertEquals(501, g.remaining(1))
+        while (g.canUndo) g.undo()
+        assertEquals(501, g.remaining(0))
+        assertEquals("A", g.currentPlayer.name)
+    }
+
+    @Test fun theFirstPlayerCanBeRemovedBeforeAnyDartAndTheLastOneCannot() {
+        val g = X01Game(two, X01Config(501))
+        assertTrue(g.removePlayer(0))
+        assertEquals("B", g.currentPlayer.name)
+        assertEquals(501, g.remaining(0))
+        assertFalse(g.removePlayer(0))
+        g.throwDart(DartHit.single(20))
+        assertEquals(481, g.remaining(0))
+    }
+
+    @Test fun aLegStarterWhoIsRemovedHandsTheNextLegToTheFollowingPlayer() {
+        val g = X01Game(three, X01Config(40, legsToWin = 2))
+        g.throwDart(DartHit.double(20))
+        assertEquals(com.opendarts.game.engine.Outcome.LEG_WON, g.lastOutcome)
+        assertTrue(g.removePlayer(0))
+        assertEquals("B", g.currentPlayer.name)
+        assertEquals(40, g.remaining(0))
+        assertEquals(0, g.currentPlayerIndex)
+    }
+
     @Test fun threeDartsSubtractAndPassTheTurn() {
         val g = X01Game(two, X01Config(501))
         repeat(3) { g.throwDart(DartHit.treble(20)) }

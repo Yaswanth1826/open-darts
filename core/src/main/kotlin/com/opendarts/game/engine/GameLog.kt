@@ -9,6 +9,8 @@ sealed interface GameAction {
     data object NextTurn : GameAction
     data object Undo : GameAction
     data object Previous : GameAction
+    /** The player at [index] was taken out of the game. */
+    data class Remove(val index: Int) : GameAction
     /** [hit] null removes the dart. */
     data class Edit(val index: Int, val hit: DartHit?) : GameAction
 }
@@ -30,6 +32,7 @@ class GameLog(actions: List<GameAction> = emptyList()) {
             GameAction.NextTurn -> game.endTurn()
             GameAction.Undo -> game.undo()
             GameAction.Previous -> game.previousPlayer()
+            is GameAction.Remove -> game.removePlayer(action.index)
             is GameAction.Edit -> game.editDart(action.index, action.hit)
         }
     }
@@ -40,6 +43,7 @@ class GameLog(actions: List<GameAction> = emptyList()) {
             GameAction.NextTurn -> "N"
             GameAction.Undo -> "U"
             GameAction.Previous -> "P"
+            is GameAction.Remove -> "R,${it.index}"
             is GameAction.Edit -> "E,${it.index},${it.hit?.let(::hit) ?: "x"}"
         }
     }
@@ -56,6 +60,7 @@ class GameLog(actions: List<GameAction> = emptyList()) {
                     "N" -> GameAction.NextTurn
                     "U" -> GameAction.Undo
                     "P" -> GameAction.Previous
+                    "R" -> GameAction.Remove(parts[1].toInt())
                     "E" -> GameAction.Edit(parts[1].toInt(), if (parts[2] == "x") null else parseHit(parts[2]))
                     else -> error("unknown action $token")
                 }
