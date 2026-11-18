@@ -49,10 +49,14 @@ class Net:
         self.out = self.it.get_output_details()[0]
 
     def run(self, rgb640, min_score=0.25):
-        x = np.transpose(rgb640.astype(np.float32) / 255.0, (2, 0, 1))[None]
+        x = rgb640.astype(np.float32)[None] / 255.0
+        if self.inp["shape"][-1] != 3:  # channels-first model
+            x = np.transpose(x, (0, 3, 1, 2))
         self.it.set_tensor(self.inp["index"], x)
         self.it.invoke()
         out = self.it.get_tensor(self.out["index"])[0]
+        if out.shape[0] > out.shape[1]:  # [candidates, 4 + classes]
+            out = out.T
         boxes, scores = out[:4].T, out[4:].T
         if boxes.max() > 2:
             boxes = boxes / SIZE
