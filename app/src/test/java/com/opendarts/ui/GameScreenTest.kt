@@ -51,6 +51,7 @@ class GameScreenTest {
     fun keypadScoreUpdatesInLandscape() = play(shotName = "manual-landscape")
 
     private fun camera(shotName: String) {
+        com.opendarts.ui.common.CameraGuide.markSeen(rule.activity)
         val session = GameSession().also { it.start(GameSetup(input = InputMode.CAMERA)) }
         rule.setContent { OpenDartsTheme { GameScreen(session, onExit = {}, onCalibrate = {}) } }
         rule.waitForIdle()
@@ -72,6 +73,7 @@ class GameScreenTest {
 
     @Test @Config(qualifiers = "w700dp-h360dp-land-xxhdpi")
     fun tappingADartOpensTheScorePadAndOneMoreTapChangesIt() {
+        com.opendarts.ui.common.CameraGuide.markSeen(rule.activity)
         val session = GameSession().also { it.start(GameSetup(input = InputMode.CAMERA)) }
         rule.setContent { OpenDartsTheme { GameScreen(session, onExit = {}, onCalibrate = {}) } }
         val triple20 = com.opendarts.game.model.DartHit(20, com.opendarts.game.model.Multiplier.TRIPLE)
@@ -88,6 +90,7 @@ class GameScreenTest {
 
     @Test @Config(qualifiers = "w700dp-h360dp-land-xxhdpi")
     fun aDartCanBeRemovedStraightFromThePad() {
+        com.opendarts.ui.common.CameraGuide.markSeen(rule.activity)
         val session = GameSession().also { it.start(GameSetup(input = InputMode.CAMERA)) }
         rule.setContent { OpenDartsTheme { GameScreen(session, onExit = {}, onCalibrate = {}) } }
         rule.runOnIdle { session.throwDart(com.opendarts.game.model.DartHit(20, com.opendarts.game.model.Multiplier.TRIPLE), fromCamera = true) }

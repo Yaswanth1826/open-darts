@@ -66,6 +66,7 @@ import com.opendarts.ui.camera.ScoringCamera
 import com.opendarts.ui.camera.TfliteDartNet
 import com.opendarts.ui.camera.TfliteTipNet
 import com.opendarts.ui.camera.TrainingCollector
+import com.opendarts.ui.common.CameraGuide
 import com.opendarts.ui.common.SetupTipsDialog
 import com.opendarts.ui.theme.Body
 import com.opendarts.ui.theme.Display
@@ -83,7 +84,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     var status by remember { mutableStateOf(CameraStatus()) }
     val markers = remember { mutableStateListOf<Point>() }
     var aligning by remember { mutableStateOf(false) }
-    var tips by remember { mutableStateOf(false) }
+    var tips by remember { mutableStateOf(!CameraGuide.seen(context)) }
     var outline by remember { mutableStateOf<Boolean?>(null) }
     val collector = remember { TrainingCollector(context) }
     var collecting by remember { mutableStateOf(collector.enabled) }
@@ -190,7 +191,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
             Box(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) { panel(false) }
         }
     }
-    if (tips) SetupTipsDialog { tips = false }
+    if (tips) SetupTipsDialog { tips = false; CameraGuide.markSeen(context) }
     editing?.let { slot ->
         DartEditor(
             slot, game.turnHits.getOrNull(slot), front = game.turnHits.take(slot),
