@@ -8,17 +8,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.opendarts.billing.LocalEntitlements
 import com.opendarts.game.x01.X01Config
 import com.opendarts.session.GameKind
 import com.opendarts.session.GameSession
 import com.opendarts.session.GameSetup
 import com.opendarts.session.GameStore
+import com.opendarts.session.InputMode
 import com.opendarts.ui.camera.CalibrationScreen
+import com.opendarts.ui.common.PaywallDialog
 import com.opendarts.ui.game.GameScreen
 import com.opendarts.ui.setup.NewGameScreen
 
@@ -28,6 +32,8 @@ private enum class Page { HOME, NEW, GAME, CALIBRATE }
 fun OpenDartsApp() {
     val session: GameSession = viewModel()
     val context = LocalContext.current
+    val entitlements = remember { LocalEntitlements(context) }
+    session.entitlements = entitlements
     LaunchedEffect(session) { session.attach(GameStore(context.applicationContext)) }
     var page by rememberSaveable { mutableStateOf(Page.HOME) }
     var tab by rememberSaveable { mutableStateOf(Tab.PLAY) }
@@ -54,7 +60,7 @@ fun OpenDartsApp() {
                         } ?: "",
                     )
                     Tab.PLAYERS -> PlayersScreen()
-                    Tab.SETTINGS -> SettingsScreen()
+                    Tab.SETTINGS -> SettingsScreen(entitlements)
                 }
             }
             Page.NEW -> NewGameScreen(session, onStart = { page = Page.GAME }, onBack = { page = Page.HOME })
@@ -64,6 +70,12 @@ fun OpenDartsApp() {
                 onCalibrate = { returnTo = Page.GAME; page = Page.CALIBRATE },
             )
             Page.CALIBRATE -> CalibrationScreen(onDone = { session.manualCalibration = true; page = returnTo }, onCancel = { page = returnTo })
+        }
+        if (session.paywall) {
+            PaywallDialog(
+                onKeypad = { session.draft = session.draft.copy(input = InputMode.MANUAL); session.paywall = false },
+                onDismiss = { session.paywall = false },
+            )
         }
     }
 }

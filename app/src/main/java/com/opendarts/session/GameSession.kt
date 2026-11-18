@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import com.opendarts.billing.EntitlementProvider
 import com.opendarts.game.engine.DartGame
 import com.opendarts.game.engine.DartTrace
 import com.opendarts.game.engine.GameAction
@@ -66,6 +67,7 @@ class GameSession : ViewModel() {
         val restored = runCatching { saved.buildGame().also { savedLog.replay(it) } }.getOrNull()
         if (restored == null) { saver.clear(); return }
         setup = saved
+        cameraCounted = saved.input == InputMode.CAMERA
         game = restored
         log.clear()
         savedLog.actions.forEach(log::add)
@@ -115,7 +117,28 @@ class GameSession : ViewModel() {
         if (g.turnOver) VisitCall.of(g, outcome)?.let { visitEnded(g, it) }
     }
 
-    fun start(newSetup: GameSetup) {
+    /** Decides who may use the camera; null means everything is allowed (tests, keypad-only builds). */
+    var entitlements: EntitlementProvider? = null
+
+    /** Set when a camera request was refused, so the screen can offer the subscription. */
+    var paywall by mutableStateOf(false)
+
+    /** The running game already took its free camera game (or the player is subscribed). */
+    private var cameraCounted = false
+
+    private fun claimCamera(newGame: Boolean): Boolean {
+        if (!newGame && cameraCounted) return true
+        val provider = entitlements ?: return true
+        val access = provider.access()
+        if (!access.canUseCamera) { paywall = true; return false }
+        if (!access.premium) provider.useFreeGame()
+        return true
+    }
+
+    /** Starts a game; returns false (and raises [paywall]) when it needs the camera and the player may not use it. */
+    fun start(newSetup: GameSetup): Boolean {
+        if (newSetup.input == InputMode.CAMERA && !claimCamera(newGame = true)) return false
+        cameraCounted = newSetup.input == InputMode.CAMERA
         setup = newSetup
         game = newSetup.buildGame()
         turnEndedEarly = false
@@ -126,12 +149,15 @@ class GameSession : ViewModel() {
         message = "${game!!.currentPlayer.name} to throw"
         dismissedResult = false
         changed()
+        return true
     }
 
-    fun rematch() = start(setup)
+    fun rematch() { start(setup) }
 
-    /** Switches between camera and keypad scoring in the middle of a game. */
+    /** Switches between camera and keypad scoring in the middle of a game; the camera may be refused. */
     fun switchInput(mode: InputMode) {
+        if (mode == InputMode.CAMERA && !claimCamera(newGame = false)) return
+        cameraCounted = cameraCounted || mode == InputMode.CAMERA
         setup = setup.copy(input = mode)
         cameraMemory = null
         changed()
