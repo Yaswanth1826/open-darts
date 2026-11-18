@@ -36,8 +36,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.opendarts.game.model.DartHit
 import com.opendarts.game.model.Multiplier
-import com.opendarts.ui.theme.Condensed
-import com.opendarts.ui.theme.Palette
+import com.opendarts.ui.theme.Display
+import com.opendarts.ui.theme.Pal
 
 /**
  * One tap on a dart slot opens the score pad at once, for a dart that is there as well as for the next empty slot: one more
@@ -63,42 +63,42 @@ fun DartEditor(
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
-            shape = RoundedCornerShape(20.dp), color = Palette.KeyLight,
+            shape = RoundedCornerShape(24.dp), color = Pal.Surface, border = androidx.compose.foundation.BorderStroke(1.dp, Pal.Line),
             modifier = Modifier.padding(8.dp).widthIn(max = if (wide) 660.dp else 380.dp).fillMaxWidth().heightIn(max = (configuration.screenHeightDp * 0.94f).dp),
         ) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (current != null) {
                         Box(Modifier.padding(end = 6.dp).clip(RoundedCornerShape(8.dp)).clickable { done(null) }.padding(8.dp)) {
-                            Icon(Icons.Default.Delete, "Remove dart", tint = Palette.Red)
+                            Icon(Icons.Default.Delete, "Remove dart", tint = Pal.Coral)
                         }
                     }
                     Text(
                         if (current == null) "Dart ${slot + 1}: enter score" else "Dart ${slot + 1}: ${current.label} \u2013 pick the right score",
-                        color = Palette.Ink, fontFamily = Condensed, fontSize = 22.sp, modifier = Modifier.weight(1f),
+                        color = Pal.Text, fontFamily = Display, fontSize = 20.sp, modifier = Modifier.weight(1f),
                     )
-                    Text("CANCEL", color = Palette.Ink.copy(alpha = 0.6f), fontFamily = Condensed, fontSize = 16.sp, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onDismiss).padding(8.dp))
+                    Text("CANCEL", color = Pal.Muted, fontFamily = Display, fontSize = 15.sp, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onDismiss).padding(8.dp))
                 }
                 run {
                     if (current == null && front.isNotEmpty()) {
-                        Text("Hidden behind a dart?", color = Palette.Ink.copy(alpha = 0.7f), fontFamily = Condensed, fontSize = 16.sp)
+                        Text("Hidden behind a dart?", color = Pal.Muted, fontFamily = Display, fontSize = 15.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            front.forEachIndexed { i, hit -> Key("Dart ${i + 1}: ${hit.label}", Modifier.weight(1f), key, Palette.KeyDark, 17) { onBehind(i); onDismiss() } }
+                            front.forEachIndexed { i, hit -> Key("Dart ${i + 1}: ${hit.label}", Modifier.weight(1f), key, Pal.Raised, 16) { onBehind(i); onDismiss() } }
                         }
                     }
                     val multipliers: @Composable (Modifier) -> Unit = { modifier ->
                         Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Multiplier.values().forEach { m ->
                                 val selected = m == multiplier
-                                Key(m.name.lowercase().replaceFirstChar { it.uppercase() }, Modifier.weight(1f), key, if (selected) Palette.Red else Palette.KeyMid, 18, if (selected) Color.White else Palette.Ink) { multiplier = m }
+                                Key(m.name.lowercase().replaceFirstChar { it.uppercase() }, Modifier.weight(1f), key, if (selected) Pal.Lime else Pal.Raised, 17, if (selected) Pal.OnLime else Pal.Text) { multiplier = m }
                             }
                         }
                     }
                     val specials: @Composable (Modifier) -> Unit = { modifier ->
                         Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Key("Miss", Modifier.weight(1f), key, Palette.KeyMid) { done(DartHit.MISS) }
-                            Key("25", Modifier.weight(1f), key, Palette.KeyMid) { done(DartHit.OUTER_BULL) }
-                            Key("Bull", Modifier.weight(1f), key, Palette.KeyMid) { done(DartHit.INNER_BULL) }
+                            Key("Miss", Modifier.weight(1f), key, Pal.Raised) { done(DartHit.MISS) }
+                            Key("25", Modifier.weight(1f), key, Pal.Raised) { done(DartHit.OUTER_BULL) }
+                            Key("Bull", Modifier.weight(1f), key, Pal.Raised, ink = Pal.Coral) { done(DartHit.INNER_BULL) }
                         }
                     }
                     if (wide) {
@@ -110,7 +110,7 @@ fun DartEditor(
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             numbers.forEach { n ->
                                 val isCurrent = current != null && current.base == n && current.multiplier == multiplier
-                                Key(n.toString(), Modifier.weight(1f), key, Palette.KeyDark.copy(alpha = if (isCurrent) 1f else 0.55f)) { done(DartHit(n, multiplier)) }
+                                Key(n.toString(), Modifier.weight(1f), key, if (isCurrent) Pal.Lime else Pal.Raised, ink = if (isCurrent) Pal.OnLime else Pal.Text) { done(DartHit(n, multiplier)) }
                             }
                         }
                     }
@@ -122,8 +122,8 @@ fun DartEditor(
 }
 
 @Composable
-private fun Key(label: String, modifier: Modifier, height: androidx.compose.ui.unit.Dp, tint: Color, size: Int = 20, ink: Color = Palette.Ink, onClick: () -> Unit) {
-    Box(modifier.height(height).clip(RoundedCornerShape(10.dp)).background(tint).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Text(label, color = ink, fontFamily = Condensed, fontSize = size.sp, maxLines = 1)
+private fun Key(label: String, modifier: Modifier, height: androidx.compose.ui.unit.Dp, tint: Color, size: Int = 19, ink: Color = Pal.Text, onClick: () -> Unit) {
+    Box(modifier.height(height).clip(RoundedCornerShape(12.dp)).background(tint).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Text(label, color = ink, fontFamily = Display, fontSize = size.sp, maxLines = 1)
     }
 }

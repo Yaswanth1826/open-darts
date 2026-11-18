@@ -46,6 +46,10 @@ The APK will be at `app/build/outputs/apk/debug/app-debug.apk` after a successfu
 
 No login, backend, analytics SDK, paid API, subscription, or ad SDK is included. Gameplay is local. The camera feature asks for camera permission only when opened. Camera frames are processed on-device and never uploaded. While **Collect training photos** is on (it is on by default, with a cap of 700 photos; switch it off or use **Delete training photos** in the camera menu) the app saves photos of the board to `Pictures/OpenDarts/Training` on your phone, where only you can see them, so you can retrain the model on your own board.
 
+## Licences and credits
+
+See [NOTICE.txt](NOTICE.txt) (also in the app under Settings > Open-source notices and credits). The detector is trained with the DeepDarts dataset (citation in NOTICE) and the dartscribe dataset (CC BY-SA 4.0, Ercan Akyürek); the training toolchain is Ultralytics YOLO (AGPL-3.0). The font is Space Grotesk (SIL OFL 1.1). Check these terms before any paid release.
+
 ## Build an APK without installing Android Studio
 
 This repository includes a GitHub Actions workflow at `.github/workflows/build-apk.yml`.

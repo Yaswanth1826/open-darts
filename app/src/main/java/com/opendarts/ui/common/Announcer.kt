@@ -47,3 +47,10 @@ class Announcer(context: Context) {
 }
 
 val LocalAnnouncer = staticCompositionLocalOf<Announcer?> { null }
+
+/** The sound switch for screens that have no [Announcer] of their own (Settings). */
+object SoundSetting {
+    private fun prefs(context: Context) = context.applicationContext.getSharedPreferences("opendarts_sound", Context.MODE_PRIVATE)
+    fun isOn(context: Context): Boolean = prefs(context).getBoolean("on", true)
+    fun set(context: Context, on: Boolean) = prefs(context).edit().putBoolean("on", on).apply()
+}

@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -65,9 +67,9 @@ import com.opendarts.ui.camera.TfliteDartNet
 import com.opendarts.ui.camera.TfliteTipNet
 import com.opendarts.ui.camera.TrainingCollector
 import com.opendarts.ui.common.SetupTipsDialog
-import com.opendarts.ui.theme.Condensed
-import com.opendarts.ui.theme.CondensedRegular
-import com.opendarts.ui.theme.Palette
+import com.opendarts.ui.theme.Body
+import com.opendarts.ui.theme.Display
+import com.opendarts.ui.theme.Pal
 import com.opendarts.vision.TrackerEvent
 import kotlin.math.hypot
 import com.opendarts.vision.TrackerState
@@ -148,13 +150,14 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
         )
     }
     val panel: @Composable (Boolean) -> Unit = { fill ->
-        Column(if (fill) Modifier.fillMaxHeight().clip(RoundedCornerShape(18.dp)) else Modifier.clip(RoundedCornerShape(20.dp))) {
+        Column(if (fill) Modifier.fillMaxHeight() else Modifier) {
             CurrentCard(game, if (fill) Modifier.weight(1f) else Modifier, fill = fill, onSlot = { editing = it })
-            PlayerTabs(game, roomy = false)
+            Spacer(Modifier.height(6.dp))
+            PlayerTabs(game)
         }
     }
 
-    Column(Modifier.fillMaxSize().background(Palette.Slate).gameInsets()) {
+    Column(Modifier.fillMaxSize().background(Pal.Bg).gameInsets()) {
         GameTopBar(session, game, onExit, onPrevious = { session.previousPlayer() }, onNextPlayer = { session.nextPlayer() }) { dismiss ->
             DropdownMenuItem(text = { Text("Rescan board") }, onClick = { dismiss(); camera.findBoardAgain() })
             DropdownMenuItem(text = { Text("Board is clear \u2013 start now") }, enabled = status.phase == CameraPhase.TRACKING, onClick = { dismiss(); camera.startNow() })
@@ -183,7 +186,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
                 Box(Modifier.weight(1f).fillMaxHeight()) { panel(true) }
             }
         } else {
-            cameraBox(Modifier.weight(1f).fillMaxWidth())
+            cameraBox(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp))
             Box(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) { panel(false) }
         }
     }
@@ -221,7 +224,7 @@ private fun CameraArea(
     val zoomNow by rememberUpdatedState(zoom)
     val zoomTo by rememberUpdatedState(onZoom)
     val aspect = if (status.frameWidth > 0) status.frameWidth.toFloat() / status.frameHeight else if (portrait) 0.75f else 1.3333f
-    Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
+    Box(modifier.clip(RoundedCornerShape(22.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
         CameraPermissionGate(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Box(Modifier.aspectRatio(aspect).pointerInput(zoomRange) {
@@ -239,8 +242,8 @@ private fun CameraArea(
                 }
                 ZoomButtons(zoom, zoomRange, onZoom, Modifier.align(Alignment.CenterEnd).padding(end = 10.dp))
                 Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.Bottom) {
-                    Box(Modifier.weight(1f, fill = false).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.75f)).padding(horizontal = 12.dp, vertical = 6.dp)) {
-                        Text(round, color = Palette.Ink, fontFamily = Condensed, fontSize = 18.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Box(Modifier.weight(1f, fill = false).clip(RoundedCornerShape(12.dp)).background(Color(0xB312161C)).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                        Text(round, color = Pal.Text, fontFamily = Display, fontSize = 15.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                     Box(Modifier.weight(0.01f))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -263,9 +266,9 @@ private fun ZoomButtons(zoom: Float, range: ClosedFloatingPointRange<Float>, onZ
             val chosen = kotlin.math.abs(step - zoom) < 0.05f
             Box(
                 Modifier.size(width = 46.dp, height = 36.dp).clip(RoundedCornerShape(18.dp))
-                    .background(if (chosen) Palette.Link else Palette.Charcoal.copy(alpha = 0.75f)).clickable { onZoom(step) },
+                    .background(if (chosen) Pal.Lime else Color(0xB312161C)).clickable { onZoom(step) },
                 contentAlignment = Alignment.Center,
-            ) { Text(if (step < 1f) "%.1fx".format(step) else "${step.toInt()}x", color = Color.White, fontFamily = Condensed, fontSize = 16.sp) }
+            ) { Text(if (step < 1f) "%.1fx".format(step) else "${step.toInt()}x", color = if (chosen) Pal.OnLime else Pal.Text, fontFamily = Display, fontSize = 15.sp) }
         }
     }
 }
@@ -273,7 +276,7 @@ private fun ZoomButtons(zoom: Float, range: ClosedFloatingPointRange<Float>, onZ
 @Composable
 private fun OverlayButton(enabled: Boolean = true, onClick: () -> Unit, content: @Composable () -> Unit) {
     Box(
-        Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(Palette.Charcoal.copy(alpha = if (enabled) 0.85f else 0.45f)).clickable(enabled = enabled, onClick = onClick),
+        Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xB312161C).copy(alpha = if (enabled) 0.85f else 0.45f)).clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { content() }
 }
@@ -290,7 +293,7 @@ private fun StatusPill(status: CameraStatus, message: String, debug: Boolean, mo
         else -> message
     } + if (debug && status.usingAi && status.lookMs > 0) "  \u00B7  ${status.lookMs} ms" else ""
     Box(modifier.clip(RoundedCornerShape(50)).background(Color(0xB3000000)).padding(horizontal = 16.dp, vertical = 6.dp)) {
-        Text(text, color = Color.White, fontFamily = Condensed, fontSize = 17.sp, textAlign = TextAlign.Center, maxLines = 1)
+        Text(text, color = Color.White, fontFamily = Display, fontSize = 15.sp, textAlign = TextAlign.Center, maxLines = 1)
     }
 }
 
@@ -305,12 +308,12 @@ private fun coaching(view: BoardView?): String? = when (view?.placement) {
 /** Dark card over the camera while the board is not locked yet. */
 @Composable
 private fun FindingCard(notFound: Boolean, camera: ScoringCamera, onAlign: () -> Unit, onCalibrate: () -> Unit, onTips: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xE6322E26)).padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xEB12161C)).padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             if (notFound) "Can't see the board clearly. Put the phone beside the board, a little to one side and facing it, with the whole board in view." else "Point the camera at the dartboard from a little to the side, with the whole board in view.",
-            color = Color.White.copy(alpha = 0.92f), fontFamily = CondensedRegular, fontSize = 18.sp, textAlign = TextAlign.Center,
+            color = Color.White.copy(alpha = 0.92f), fontFamily = Body, fontSize = 16.sp, textAlign = TextAlign.Center,
         )
-        Text("Setup tips \u203A", color = Palette.Link, fontFamily = Condensed, fontSize = 19.sp, modifier = Modifier.clickable(onClick = onTips))
+        Text("Setup tips \u203A", color = Pal.Lime, fontFamily = Display, fontSize = 17.sp, modifier = Modifier.clickable(onClick = onTips))
         if (notFound) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { camera.findBoardAgain() }) { Text("Try again", maxLines = 1) }
@@ -323,10 +326,10 @@ private fun FindingCard(notFound: Boolean, camera: ScoringCamera, onAlign: () ->
 
 @Composable
 private fun AlignCard(onLock: () -> Unit, onCancel: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xE6322E26)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xEB12161C)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             "Drag the green circle onto the board and pinch to resize it until the outer ring sits on the outside edge of the doubles. The red line must point at the 20. Clear the board of darts first.",
-            color = Color.White.copy(alpha = 0.92f), fontFamily = CondensedRegular, fontSize = 16.sp,
+            color = Color.White.copy(alpha = 0.92f), fontFamily = Body, fontSize = 15.sp,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onLock, modifier = Modifier.weight(1f)) { Text("Lock board") }

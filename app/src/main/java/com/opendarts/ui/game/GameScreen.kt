@@ -22,10 +22,13 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -71,9 +74,10 @@ import com.opendarts.session.GameSession
 import com.opendarts.session.InputMode
 import com.opendarts.ui.common.Announcer
 import com.opendarts.ui.common.LocalAnnouncer
-import com.opendarts.ui.theme.Condensed
-import com.opendarts.ui.theme.CondensedRegular
-import com.opendarts.ui.theme.Palette
+import com.opendarts.ui.common.RoundIconButton
+import com.opendarts.ui.theme.Body
+import com.opendarts.ui.theme.Display
+import com.opendarts.ui.theme.Pal
 
 /**
  * The engine is a mutable object, so Compose cannot see it change. Every screen that reads it calls [ObserveGame],
@@ -162,17 +166,17 @@ private fun CalloutFlash(callout: Callout, onDone: () -> Unit) {
         kotlinx.coroutines.delay(1500)
         onDone()
     }
-    val color = when (callout.kind) {
-        CalloutKind.BUST -> Palette.Red
-        CalloutKind.GOOD -> Palette.Teal
-        CalloutKind.PLAIN -> Palette.Charcoal
+    val (color, ink) = when (callout.kind) {
+        CalloutKind.BUST -> Pal.Coral to Pal.OnLime
+        CalloutKind.GOOD -> Pal.Lime to Pal.OnLime
+        CalloutKind.PLAIN -> Pal.Raised to Pal.Text
     }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
-            callout.text, color = Color.White, fontFamily = Condensed, fontSize = 56.sp, maxLines = 1,
+            callout.text, color = ink, fontFamily = Display, fontSize = 52.sp, maxLines = 1,
             modifier = Modifier
                 .graphicsLayer { scaleX = pop.value; scaleY = pop.value }
-                .clip(RoundedCornerShape(16.dp)).background(color.copy(alpha = 0.92f)).padding(horizontal = 28.dp, vertical = 8.dp),
+                .clip(RoundedCornerShape(22.dp)).background(color.copy(alpha = 0.96f)).padding(horizontal = 28.dp, vertical = 8.dp),
         )
     }
 }
@@ -186,7 +190,7 @@ private fun MatchStats(rows: List<X01Summary>) {
                     if (r.sets > 0) append("${r.sets} sets \u00B7 ")
                     if (r.legs > 0 || r.sets > 0) append("${r.legs} legs \u00B7 ")
                 }
-                Text(if (r.won) "${r.name}  \u2605" else r.name, fontFamily = Condensed, fontSize = 18.sp)
+                Text(if (r.won) "${r.name}  \u2605" else r.name, fontFamily = Display, fontSize = 18.sp)
                 Text("${result}Avg ${"%.1f".format(r.average)} \u00B7 Best visit ${r.highestVisit} \u00B7 ${r.darts} darts", fontSize = 13.sp)
                 Text(
                     "100+ ${r.hundredPlus} \u00B7 140+ ${r.oneFortyPlus} \u00B7 180s ${r.oneEighties}" +
@@ -210,32 +214,23 @@ private fun ManualGame(session: GameSession, game: DartGame<*>, onExit: () -> Un
             modifier = modifier,
         )
     }
-    Column(Modifier.fillMaxSize().background(Palette.KeyLight).gameInsets()) {
+    Column(Modifier.fillMaxSize().background(Pal.Bg).gameInsets()) {
         GameTopBar(session, game, onExit, onPrevious = null, onNextPlayer = null)
         if (landscape) {
-            Row(Modifier.weight(1f).fillMaxWidth()) {
+            Row(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 keypad(Modifier.weight(1.3f).fillMaxHeight())
-                Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFFE2E2E2))) {
+                Column(Modifier.weight(1f).fillMaxHeight().padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     CurrentCard(game, Modifier.weight(1f), fill = true, onSlot = { editing = it })
-                    Text(
-                        session.message, color = Palette.Ink.copy(alpha = 0.7f), fontFamily = CondensedRegular, fontSize = 14.sp, maxLines = 1,
-                        modifier = Modifier.fillMaxWidth().background(Color(0xFFE2E2E2)).padding(horizontal = 12.dp, vertical = 2.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    )
-                    PlayerTabs(game, roomy = false)
+                    MessageLine(session.message)
+                    PlayerTabs(game)
                 }
             }
         } else {
-            Column(Modifier.fillMaxWidth().background(Color(0xFFE2E2E2)).padding(bottom = 2.dp)) {
-                DartSlots(game, Color(0xFF7A7A7A), onSlot = { editing = it })
-                Text(
-                    session.message, color = Palette.Ink.copy(alpha = 0.7f), fontFamily = CondensedRegular, fontSize = 14.sp, maxLines = 1,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
-                checkoutHint(game)?.let {
-                    Text("FINISH  $it", color = Palette.Teal, fontFamily = Condensed, fontSize = 17.sp, maxLines = 1, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                }
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CurrentCard(game, onSlot = { editing = it })
+                MessageLine(session.message)
+                PlayerTabs(game)
             }
-            PlayerTabs(game, roomy = true)
             keypad(Modifier.weight(1f))
         }
     }
@@ -270,10 +265,10 @@ fun GameTopBar(
     val configuration = LocalConfiguration.current
     val wide = configuration.screenWidthDp >= 600
     val short = configuration.screenHeightDp < 480
-    val side = if (short) 34.dp else 40.dp
-    Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 10.dp, vertical = if (short) 2.dp else 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    val side = if (short) 36.dp else 42.dp
+    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = if (short) 2.dp else 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Box {
-            SquareButton(onClick = { menu = true }, size = side) { Icon(Icons.Default.MoreVert, "Menu", tint = Palette.Ink) }
+            RoundIconButton(onClick = { menu = true }, size = side) { Icon(Icons.Default.MoreVert, "Menu", tint = Pal.Text) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("Scoreboard") }, onClick = { menu = false; board = true })
                 DropdownMenuItem(text = { Text("Undo last dart") }, enabled = game.canUndo, onClick = { menu = false; session.undo() })
@@ -283,27 +278,28 @@ fun GameTopBar(
                 DropdownMenuItem(text = { Text("Quit game") }, onClick = { menu = false; if (game.canUndo && !game.isFinished) confirmQuit = true else onExit() })
             }
         }
-        SquareButton(onClick = { session.switchInput(if (camera) InputMode.MANUAL else InputMode.CAMERA) }, size = side) {
-            Text("AI", color = if (camera) Palette.Teal else Palette.Ink.copy(alpha = 0.4f), fontFamily = Condensed, fontSize = 22.sp)
-        }
+        Box(
+            Modifier.size(side).clip(CircleShape).background(if (camera) Pal.Lime else Pal.Raised).clickable { session.switchInput(if (camera) InputMode.MANUAL else InputMode.CAMERA) },
+            contentAlignment = Alignment.Center,
+        ) { Icon(if (camera) Icons.Default.CameraAlt else Icons.Default.Keyboard, if (camera) "Switch to keypad" else "Switch to camera", tint = if (camera) Pal.OnLime else Pal.Muted) }
         val leg = (game as? X01Game)?.let { if (it.config.legsToWin > 1 || it.config.setsToWin > 1) ", LEG ${it.gameState.legsPlayed + 1}" else "" }.orEmpty()
         BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             // With the player buttons on the right there may be no room left: the title then lives on the camera instead.
             if (maxWidth >= 96.dp) {
                 Text(
                     buildAnnotatedString {
-                        withStyle(SpanStyle(color = Palette.Ink, fontSize = if (onNextPlayer != null) (if (wide) 22.sp else 18.sp) else if (short) 24.sp else 28.sp)) { append(session.setup.title.uppercase()) }
-                        if (onNextPlayer == null) withStyle(SpanStyle(color = Palette.Ink.copy(alpha = 0.5f), fontSize = 16.sp)) { append("  R${game.round}$leg") }
+                        withStyle(SpanStyle(color = Pal.Text, fontSize = if (onNextPlayer != null) (if (wide) 22.sp else 18.sp) else if (short) 22.sp else 26.sp)) { append(session.setup.title.uppercase()) }
+                        if (onNextPlayer == null) withStyle(SpanStyle(color = Pal.Muted, fontSize = 15.sp)) { append("  R${game.round}$leg") }
                     },
-                    fontFamily = Condensed, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+                    fontFamily = Display, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
                 )
             }
         }
         if (onNextPlayer != null) {
             if (onPrevious != null) PlayerButton(if (wide) "\u2039 PREV PLAYER" else "\u2039 PREV", onPrevious, height = side, compact = !wide)
-            PlayerButton(if (wide) "NEXT PLAYER \u203A" else "NEXT \u203A", onNextPlayer, enabled = !game.isFinished, height = side, compact = !wide)
+            PlayerButton(if (wide) "NEXT PLAYER \u203A" else "NEXT \u203A", onNextPlayer, enabled = !game.isFinished, height = side, compact = !wide, primary = true)
         } else {
-            SquareButton(onClick = { board = true }, size = side) { Icon(Icons.AutoMirrored.Filled.List, "Scoreboard", tint = Palette.Ink) }
+            RoundIconButton(onClick = { board = true }, size = side) { Icon(Icons.AutoMirrored.Filled.List, "Scoreboard", tint = Pal.Text) }
         }
     }
     if (removing) {
@@ -343,16 +339,16 @@ fun GameTopBar(
 }
 
 @Composable
-private fun PlayerButton(label: String, onClick: () -> Unit, enabled: Boolean = true, height: androidx.compose.ui.unit.Dp = 46.dp, compact: Boolean = false) {
+private fun PlayerButton(label: String, onClick: () -> Unit, enabled: Boolean = true, height: androidx.compose.ui.unit.Dp = 46.dp, compact: Boolean = false, primary: Boolean = false) {
     Box(
-        Modifier.height(height).clip(RoundedCornerShape(12.dp)).background(Palette.Sand).clickable(enabled = enabled, onClick = onClick).padding(horizontal = if (compact) 8.dp else 12.dp),
+        Modifier.height(height).clip(RoundedCornerShape(14.dp)).background(if (primary && enabled) Pal.Lime else Pal.Raised).clickable(enabled = enabled, onClick = onClick).padding(horizontal = if (compact) 10.dp else 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = Palette.Ink.copy(alpha = if (enabled) 1f else 0.4f), fontFamily = Condensed, fontSize = if (compact) 15.sp else 17.sp, maxLines = 1, softWrap = false)
+        Text(label, color = (if (primary) Pal.OnLime else Pal.Text).copy(alpha = if (enabled) 1f else 0.4f), fontFamily = Display, fontSize = if (compact) 14.sp else 16.sp, maxLines = 1, softWrap = false)
     }
 }
 
 @Composable
-fun SquareButton(onClick: () -> Unit, size: androidx.compose.ui.unit.Dp = 46.dp, content: @Composable () -> Unit) {
-    Box(Modifier.size(size).clip(RoundedCornerShape(12.dp)).background(Palette.Sand).clickable(onClick = onClick), contentAlignment = Alignment.Center) { content() }
+private fun MessageLine(text: String) {
+    Text(text, color = Pal.Muted, fontFamily = Body, fontSize = 13.sp, maxLines = 1, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
 }

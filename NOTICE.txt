@@ -1,0 +1,27 @@
+Open Darts uses the following third-party work.
+
+DATASETS USED TO TRAIN THE DART DETECTOR
+
+dartscribe dataset
+  By Ercan Akyurek, licensed CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/).
+  https://huggingface.co/datasets/geforcefan/dartscribe
+  Changes: the photos were converted to object-detection labels (board corners and dart tips) and mixed with other data
+  to train the detector bundled in this app.
+
+DeepDarts dataset
+  W. McNally, P. Walters, K. Vats, A. Wong and J. McPhee, "DeepDarts: Modeling Keypoints as Objects for Automatic
+  Scorekeeping in Darts using a Single Camera", CVSports 2021. Dataset on IEEE DataPort:
+  https://ieee-dataport.org/open-access/deepdarts-dataset
+
+TRAINING SOFTWARE
+
+Ultralytics YOLOv8 (AGPL-3.0), https://github.com/ultralytics/ultralytics, was used to train the detector.
+
+FONT
+
+Space Grotesk, Copyright 2020 The Space Grotesk Project Authors (https://github.com/floriankarsten/space-grotesk),
+licensed under the SIL Open Font License 1.1 (https://openfontlicense.org).
+
+LIBRARIES
+
+AndroidX, Jetpack Compose and CameraX (Apache License 2.0), and TensorFlow Lite (Apache License 2.0).
