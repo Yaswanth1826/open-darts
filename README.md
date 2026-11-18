@@ -50,6 +50,8 @@ No login, backend, analytics SDK, paid API, subscription, or ad SDK is included.
 
 See [NOTICE.txt](NOTICE.txt) (also in the app under Settings > Open-source notices and credits). The detector is trained with the DeepDarts dataset (citation in NOTICE) and the dartscribe dataset (CC BY-SA 4.0, Ercan Akyürek); the training toolchain is Ultralytics YOLO (AGPL-3.0). The font is Space Grotesk (SIL OFL 1.1). Check these terms before any paid release.
 
+The current `dartnet.tflite` (and `tiprefine.tflite`, if present) were trained with Ultralytics YOLOv8, so they live in `app/src/debug/assets/` and only test builds contain them. Release builds ship without a model until the replacement trained with an Apache-2.0 detector (YOLOX) is ready. Keep this repository private while the interim model is in it.
+
 ## Build an APK without installing Android Studio
 
 This repository includes a GitHub Actions workflow at `.github/workflows/build-apk.yml`.
