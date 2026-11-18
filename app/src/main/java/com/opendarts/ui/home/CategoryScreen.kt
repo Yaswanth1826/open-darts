@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opendarts.game.cricket.CricketMode
@@ -80,14 +82,20 @@ fun CategoryScreen(category: Category, onBack: () -> Unit, onPick: ((GameSetup) 
                 }
                 Text("${category.title.uppercase()} GAMES", color = Color.White, fontFamily = Condensed, fontSize = 30.sp, letterSpacing = 1.sp, modifier = Modifier.padding(start = 8.dp))
             }
-            Column(
-                Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val count = if (category == Category.X01) presets.size + 1 else choices(category).size
+                val landscape = maxWidth > maxHeight && count > 0
+                // On a wide screen the bubbles sit side by side and shrink to fit, so nothing needs scrolling.
+                val bubble = if (landscape) minOf(210.dp, maxHeight - 24.dp, (maxWidth - 24.dp) / count - 16.dp).coerceAtLeast(96.dp) else 210.dp
+                val layout: @Composable (@Composable () -> Unit) -> Unit = { content ->
+                    if (landscape) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) { content() }
+                    else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) { content() }
+                }
+                layout {
                 when (category) {
                     Category.X01 -> {
-                        presets.forEach { n -> Bubble(colour, onClick = { onPick { it.copy(kind = GameKind.X01, x01 = it.x01.copy(startingScore = n)) } }) { BigText(n.toString(), colour) } }
-                        CustomX01(colour) { n -> onPick { it.copy(kind = GameKind.X01, x01 = it.x01.copy(startingScore = n)) } }
+                        presets.forEach { n -> Bubble(colour, bubble, onClick = { onPick { it.copy(kind = GameKind.X01, x01 = it.x01.copy(startingScore = n)) } }) { BigText(n.toString(), colour, bubble) } }
+                        CustomX01(colour, bubble) { n -> onPick { it.copy(kind = GameKind.X01, x01 = it.x01.copy(startingScore = n)) } }
                     }
                     Category.PARTY -> {
                         Spacer(Modifier.height(60.dp))
@@ -95,13 +103,15 @@ fun CategoryScreen(category: Category, onBack: () -> Unit, onPick: ((GameSetup) 
                         Text("Shanghai, Bob's 27, Killer and more are on the way.", color = Color.White.copy(alpha = 0.85f), fontFamily = CondensedRegular, fontSize = 18.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 40.dp))
                     }
                     else -> choices(category).forEach { c ->
-                        Bubble(colour, onClick = { onPick(c.apply) }) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 26.dp)) {
-                                Text(c.label, color = colour, fontFamily = Condensed, fontSize = 34.sp, textAlign = TextAlign.Center, lineHeight = 36.sp)
-                                Text(c.note, color = Palette.Charcoal.copy(alpha = 0.7f), fontFamily = CondensedRegular, fontSize = 14.sp, textAlign = TextAlign.Center, lineHeight = 16.sp)
+                        Bubble(colour, bubble, onClick = { onPick(c.apply) }) {
+                            val scale = bubble.value / 210f
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = (26 * scale).dp)) {
+                                Text(c.label, color = colour, fontFamily = Condensed, fontSize = (34 * scale).sp, textAlign = TextAlign.Center, lineHeight = (36 * scale).sp)
+                                Text(c.note, color = Palette.Charcoal.copy(alpha = 0.7f), fontFamily = CondensedRegular, fontSize = (14 * scale).sp, textAlign = TextAlign.Center, lineHeight = (16 * scale).sp)
                             }
                         }
                     }
+                }
                 }
             }
         }
@@ -109,30 +119,31 @@ fun CategoryScreen(category: Category, onBack: () -> Unit, onPick: ((GameSetup) 
 }
 
 @Composable
-private fun Bubble(colour: Color, onClick: () -> Unit, content: @Composable () -> Unit) {
-    Box(Modifier.size(210.dp).clip(CircleShape).background(Color.White).clickable(onClick = onClick), contentAlignment = Alignment.Center) { content() }
+private fun Bubble(colour: Color, size: Dp, onClick: () -> Unit, content: @Composable () -> Unit) {
+    Box(Modifier.size(size).clip(CircleShape).background(Color.White).clickable(onClick = onClick), contentAlignment = Alignment.Center) { content() }
 }
 
 @Composable
-private fun BigText(text: String, colour: Color) = Text(text, color = colour, fontFamily = Condensed, fontSize = 84.sp)
+private fun BigText(text: String, colour: Color, bubble: Dp) = Text(text, color = colour, fontFamily = Condensed, fontSize = (84 * bubble.value / 210f).sp)
 
 @Composable
-private fun CustomX01(colour: Color, onPick: (Int) -> Unit) {
+private fun CustomX01(colour: Color, bubble: Dp, onPick: (Int) -> Unit) {
     var value by rememberSaveable { mutableIntStateOf(1001) }
-    Bubble(colour, onClick = { onPick(value) }) {
+    val scale = bubble.value / 210f
+    Bubble(colour, bubble, onClick = { onPick(value) }) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            BigText(value.toString(), colour)
-            Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                StepButton(colour, Icons.Default.Remove) { value = (value - 100).coerceAtLeast(101) }
-                StepButton(colour, Icons.Default.Add) { value = (value + 100).coerceAtMost(1501) }
+            BigText(value.toString(), colour, bubble)
+            Row(horizontalArrangement = Arrangement.spacedBy((18 * scale).dp), verticalAlignment = Alignment.CenterVertically) {
+                StepButton(colour, Icons.Default.Remove, (44 * scale).dp) { value = (value - 100).coerceAtLeast(101) }
+                StepButton(colour, Icons.Default.Add, (44 * scale).dp) { value = (value + 100).coerceAtMost(1501) }
             }
         }
     }
 }
 
 @Composable
-private fun StepButton(colour: Color, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    Box(Modifier.size(44.dp).clip(CircleShape).background(colour).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, null, tint = Color.White, modifier = Modifier.size(28.dp))
+private fun StepButton(colour: Color, icon: androidx.compose.ui.graphics.vector.ImageVector, size: Dp, onClick: () -> Unit) {
+    Box(Modifier.size(size).clip(CircleShape).background(colour).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, null, tint = Color.White, modifier = Modifier.size(size * 0.64f))
     }
 }

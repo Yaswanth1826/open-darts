@@ -48,6 +48,8 @@ import com.opendarts.ui.theme.Palette
 fun HomeScreen(onCategory: (Category) -> Unit, onQuick: () -> Unit, onResume: (() -> Unit)?, resumeDetail: String = "") {
     var menu by remember { mutableStateOf(false) }
     var tips by remember { mutableStateOf(false) }
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val landscape = configuration.screenWidthDp > configuration.screenHeightDp
     ScreenBox(Palette.Night) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -64,17 +66,27 @@ fun HomeScreen(onCategory: (Category) -> Unit, onQuick: () -> Unit, onResume: ((
                 Spacer(Modifier.weight(1f))
                 Spacer(Modifier.size(44.dp))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Tile("X01", Brush.linearGradient(listOf(Palette.Red, Color(0xFF9E2423))), Modifier.weight(1f)) { onCategory(Category.X01) }
-                Tile("CRICKET", Brush.linearGradient(listOf(Palette.Charcoal, Color(0xFF2B2B2B))), Modifier.weight(1f)) { onCategory(Category.CRICKET) }
+            val x01: @Composable (Modifier) -> Unit = { Tile("X01", Brush.linearGradient(listOf(Palette.Red, Color(0xFF9E2423))), it) { onCategory(Category.X01) } }
+            val cricket: @Composable (Modifier) -> Unit = { Tile("CRICKET", Brush.linearGradient(listOf(Palette.Charcoal, Color(0xFF2B2B2B))), it) { onCategory(Category.CRICKET) } }
+            val practice: @Composable (Modifier) -> Unit = { Tile("PRACTICE", Brush.linearGradient(listOf(Palette.Amber, Palette.Orange)), it) { onCategory(Category.PRACTICE) } }
+            val party: @Composable (Modifier) -> Unit = { Tile("PARTY", Brush.linearGradient(listOf(Palette.Teal, Color(0xFF2F7FD1), Color(0xFFE9C546))), it) { onCategory(Category.PARTY) } }
+            val resume: @Composable (Modifier) -> Unit = { if (onResume != null) WideCard("RESUME GAME", resumeDetail.ifBlank { "Pick up the game in progress." }, it, highlight = true, onClick = onResume) }
+            val quick: @Composable (Modifier) -> Unit = { WideCard("QUICK GAME", "501 scored by the camera, two players.", it, onClick = onQuick) }
+            val tipsCard: @Composable (Modifier) -> Unit = { WideCard("CAMERA SETUP TIPS", "Place the phone so the AI reads every dart.", it, onClick = { tips = true }) }
+            if (landscape) {
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) { x01(Modifier.weight(1f)); cricket(Modifier.weight(1f)); practice(Modifier.weight(1f)); party(Modifier.weight(1f)) }
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    if (onResume != null) resume(Modifier.weight(1f))
+                    quick(Modifier.weight(1f))
+                    tipsCard(Modifier.weight(1f))
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) { x01(Modifier.weight(1f)); cricket(Modifier.weight(1f)) }
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) { practice(Modifier.weight(1f)); party(Modifier.weight(1f)) }
+                resume(Modifier.fillMaxWidth())
+                quick(Modifier.fillMaxWidth())
+                tipsCard(Modifier.fillMaxWidth())
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Tile("PRACTICE", Brush.linearGradient(listOf(Palette.Amber, Palette.Orange)), Modifier.weight(1f)) { onCategory(Category.PRACTICE) }
-                Tile("PARTY", Brush.linearGradient(listOf(Palette.Teal, Color(0xFF2F7FD1), Color(0xFFE9C546))), Modifier.weight(1f)) { onCategory(Category.PARTY) }
-            }
-            if (onResume != null) WideCard("RESUME GAME", resumeDetail.ifBlank { "Pick up the game in progress." }, highlight = true, onClick = onResume)
-            WideCard("QUICK GAME", "501 scored by the camera, two players.", onClick = onQuick)
-            WideCard("CAMERA SETUP TIPS", "Place the phone so the AI reads every dart.", onClick = { tips = true })
             Text(
                 "Free and offline. No ads, no paywall.", color = Color.White.copy(alpha = 0.45f), fontFamily = CondensedRegular,
                 fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -98,9 +110,9 @@ private fun Tile(label: String, brush: Brush, modifier: Modifier, onClick: () ->
 }
 
 @Composable
-private fun WideCard(title: String, subtitle: String, highlight: Boolean = false, onClick: () -> Unit) {
+private fun WideCard(title: String, subtitle: String, modifier: Modifier = Modifier, highlight: Boolean = false, onClick: () -> Unit) {
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
+        modifier.clip(RoundedCornerShape(22.dp))
             .background(if (highlight) Palette.Teal.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.10f))
             .clickable(onClick = onClick).padding(horizontal = 22.dp, vertical = 16.dp),
     ) {

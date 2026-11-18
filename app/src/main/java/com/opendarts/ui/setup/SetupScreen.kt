@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -37,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -84,7 +86,8 @@ fun SetupScreen(session: GameSession, category: Category, onStart: () -> Unit, o
                 RuleBadge(setup) { rules = true }
             }
 
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            val landscape = LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
+            val lineup: @Composable (Modifier) -> Unit = { modifier -> Box(modifier, contentAlignment = Alignment.Center) {
                 if (roster.selected.isEmpty()) {
                     Text("Pick at least one player below.", color = Color.White.copy(alpha = 0.85f), fontFamily = CondensedRegular, fontSize = 20.sp)
                 } else {
@@ -101,12 +104,8 @@ fun SetupScreen(session: GameSession, category: Category, onStart: () -> Unit, o
                         }
                     }
                 }
-            }
-
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).background(Color.White.copy(alpha = 0.22f)).padding(horizontal = 14.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
+            } }
+            val picker: @Composable () -> Unit = {
                 Text("PLAYER NUMBERS ALLOWED: 1~${Roster.SIZE}", color = Color.White, fontFamily = CondensedRegular, fontSize = 15.sp)
                 roster.names.indices.chunked(4).forEach { row ->
                     Row(Modifier.fillMaxWidth()) {
@@ -119,6 +118,8 @@ fun SetupScreen(session: GameSession, category: Category, onStart: () -> Unit, o
                         }
                     }
                 }
+            }
+            val actions: @Composable () -> Unit = {
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         Modifier.weight(1f).height(60.dp).clip(RoundedCornerShape(14.dp)).border(BorderStroke(2.dp, Color.White), RoundedCornerShape(14.dp))
@@ -133,6 +134,23 @@ fun SetupScreen(session: GameSession, category: Category, onStart: () -> Unit, o
                             .clickable(enabled = ready) { session.start(setup.copy(playerNames = roster.chosenNames)); onStart() },
                         contentAlignment = Alignment.Center,
                     ) { Text("START GAME", color = colour, fontFamily = Condensed, fontSize = 28.sp, letterSpacing = 1.sp) }
+                }
+            }
+            val panel = Modifier.background(Color.White.copy(alpha = 0.22f)).padding(horizontal = 14.dp, vertical = 14.dp)
+            if (landscape) {
+                // Side by side: the players on the left, the pool and START GAME on the right, so the button never falls off the screen.
+                Row(Modifier.weight(1f).fillMaxWidth()) {
+                    lineup(Modifier.weight(1f).fillMaxHeight())
+                    Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(topStart = 28.dp)).then(panel), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) { picker() }
+                        actions()
+                    }
+                }
+            } else {
+                lineup(Modifier.weight(1f).fillMaxWidth())
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).then(panel), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    picker()
+                    actions()
                 }
             }
         }
