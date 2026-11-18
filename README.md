@@ -52,6 +52,8 @@ See [NOTICE.txt](NOTICE.txt) (also in the app under Settings > Open-source notic
 
 The current `dartnet.tflite` (and `tiprefine.tflite`, if present) were trained with Ultralytics YOLOv8, so they live in `app/src/debug/assets/` and only test builds contain them. Release builds ship without a model until the replacement trained with an Apache-2.0 detector (YOLOX) is ready. Keep this repository private while the interim model is in it.
 
+**Apache-2.0 detector (YOLOX).** `training/yolox_darts/` trains and exports the replacement: `to_coco.py` turns the YOLO-format mix into COCO labels, `exp_darts.py` is the YOLOX setup (tiny or nano, 5 classes, no flips so the corner labels never swap) and `export_tflite.py` writes a `dartnet.tflite` in the layout the app already reads (RGB 0..1 in, `[4 + 5, candidates]` out). Run it with `training/kaggle_yolox.ipynb` on Kaggle (T4, Internet on, links in cell 1; push the repo first because the notebook clones it). Copy the resulting `dartnet.tflite` to `app/src/debug/assets/` to compare it with the YOLOv8 model (`eval_real.py` and the ms value in the app); `SIZE = "nano"` is faster and smaller than `"tiny"`. Once it is as good, move it to `app/src/main/assets/` and delete the YOLOv8 files.
+
 ## Build an APK without installing Android Studio
 
 This repository includes a GitHub Actions workflow at `.github/workflows/build-apk.yml`.
