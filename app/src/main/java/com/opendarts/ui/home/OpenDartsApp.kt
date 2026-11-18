@@ -20,6 +20,7 @@ import com.opendarts.session.GameKind
 import com.opendarts.session.GameSession
 import com.opendarts.session.GameSetup
 import com.opendarts.session.GameStore
+import com.opendarts.session.HistoryStore
 import com.opendarts.session.InputMode
 import com.opendarts.ui.camera.CalibrationScreen
 import com.opendarts.ui.common.PaywallDialog
@@ -34,6 +35,8 @@ fun OpenDartsApp() {
     val context = LocalContext.current
     val entitlements = remember { LocalEntitlements(context) }
     session.entitlements = entitlements
+    val history = remember { HistoryStore(context.applicationContext) }
+    session.history = history
     LaunchedEffect(session) { session.attach(GameStore(context.applicationContext)) }
     var page by rememberSaveable { mutableStateOf(Page.HOME) }
     var tab by rememberSaveable { mutableStateOf(Tab.PLAY) }
@@ -59,6 +62,7 @@ fun OpenDartsApp() {
                             "${session.setup.title} \u00B7 ${g.players.joinToString(" vs ") { it.name }} \u00B7 round ${g.round}"
                         } ?: "",
                     )
+                    Tab.STATS -> StatsScreen(history)
                     Tab.PLAYERS -> PlayersScreen()
                     Tab.SETTINGS -> SettingsScreen(entitlements)
                 }

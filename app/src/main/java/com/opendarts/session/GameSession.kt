@@ -69,6 +69,9 @@ class GameSession : ViewModel() {
         setup = saved
         cameraCounted = saved.input == InputMode.CAMERA
         game = restored
+        // A game saved while finished was recorded when it finished; the latest entry is taken to be it.
+        recorded = restored.isFinished
+        gameId = if (recorded) history?.all()?.firstOrNull()?.id ?: System.currentTimeMillis() else System.currentTimeMillis()
         log.clear()
         savedLog.actions.forEach(log::add)
         trace.sync(restored.turnHits.size)
@@ -79,7 +82,29 @@ class GameSession : ViewModel() {
 
     private fun changed() {
         revision++
-        if (game != null) saver?.save(setup, log)
+        if (game != null) {
+            saver?.save(setup, log)
+            syncHistory()
+        }
+    }
+
+    /** Where finished games are kept for the Stats tab; null in tests. */
+    var history: MatchHistory? = null
+
+    private var gameId = System.currentTimeMillis()
+    private var recorded = false
+
+    /** A finished game is added to the history once; if an undo brings it back to life, it is taken out again. */
+    private fun syncHistory() {
+        val g = game ?: return
+        val book = history ?: return
+        if (g.isFinished && !recorded) {
+            book.add(MatchRecord.of(gameId, setup, g))
+            recorded = true
+        } else if (!g.isFinished && recorded) {
+            book.remove(gameId)
+            recorded = false
+        }
     }
 
     val isRunning: Boolean get() = game != null
@@ -141,6 +166,8 @@ class GameSession : ViewModel() {
         cameraCounted = newSetup.input == InputMode.CAMERA
         setup = newSetup
         game = newSetup.buildGame()
+        gameId = System.currentTimeMillis()
+        recorded = false
         turnEndedEarly = false
         cameraMemory = null
         callout = null
