@@ -61,9 +61,38 @@ class TfliteDartNet private constructor(private val interpreter: Interpreter) : 
         const val ASSET = "dartnet.tflite"
         private val LUT = FloatArray(256) { it / 255f }
 
+        private const val PREFS = "opendarts_detector"
+        private const val CHOSEN = "asset"
+        /** Evaluation builds carry several detectors side by side; this is the order they are offered in. */
+        private val KNOWN = listOf("dartnet_yolox_tiny.tflite", "dartnet_yolox_nano.tflite", "dartnet_yolov8n.tflite")
+
+        /** Every detector file shipped in the app. A release has just [ASSET], so nothing is offered there. */
+        fun available(context: Context): List<String> {
+            val found = runCatching { context.assets.list("").orEmpty().filter { it.startsWith("dartnet") && it.endsWith(".tflite") } }.getOrDefault(emptyList())
+            return found.sortedBy { KNOWN.indexOf(it).let { i -> if (i < 0) KNOWN.size else i } }
+        }
+
+        fun label(asset: String): String = when (asset) {
+            "dartnet_yolox_tiny.tflite" -> "YOLOX-Tiny"
+            "dartnet_yolox_nano.tflite" -> "YOLOX-Nano"
+            "dartnet_yolov8n.tflite" -> "YOLOv8n"
+            else -> asset.removePrefix("dartnet").removePrefix("_").removeSuffix(".tflite").replace('_', ' ').ifBlank { "Default" }
+        }
+
+        /** The detector to use: the player's pick if it is still shipped, else [ASSET], else the first one available. */
+        fun chosen(context: Context): String {
+            val all = available(context)
+            val picked = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(CHOSEN, null)
+            return picked?.takeIf { it in all } ?: ASSET.takeIf { it in all } ?: all.firstOrNull() ?: ASSET
+        }
+
+        fun choose(context: Context, asset: String) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(CHOSEN, asset).apply()
+        }
+
         /** The loaded model, or null when the model file is not in the app or cannot be loaded. */
-        fun loadOrNull(context: Context): TfliteDartNet? = runCatching {
-            val bytes = context.assets.open(ASSET).use { it.readBytes() }
+        fun loadOrNull(context: Context, asset: String = ASSET): TfliteDartNet? = runCatching {
+            val bytes = context.assets.open(asset).use { it.readBytes() }
             val model = ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder()).put(bytes).also { it.rewind() }
             TfliteDartNet(Interpreter(model, Interpreter.Options().setNumThreads(4)))
         }.getOrNull()

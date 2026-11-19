@@ -95,7 +95,9 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     var editing by remember { mutableStateOf<Int?>(null) }
     val showBoard = outline ?: !status.usingAi
     var guide by remember { mutableStateOf(Guide()) }
-    val camera = remember {
+    val models = remember { TfliteDartNet.available(context) }
+    var model by remember { mutableStateOf(TfliteDartNet.chosen(context)) }
+    val camera = remember(model) {
         ScoringCamera(
             store,
             onEvent = { event ->
@@ -114,7 +116,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
             },
             onStatus = { status = it },
             capture = DebugCapture(context),
-            net = TfliteDartNet.loadOrNull(context),
+            net = TfliteDartNet.loadOrNull(context, model),
             tipNet = TfliteTipNet.loadOrNull(context),
             collector = collector,
         ).also {
@@ -177,6 +179,16 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
                 DropdownMenuItem(text = { Text("Delete training photos") }, onClick = {
                     dismiss()
                     camera.deleteCollected { saved = "Training photos deleted" }
+                })
+            }
+            if (models.size > 1) {
+                DropdownMenuItem(text = { Text("Detector: ${TfliteDartNet.label(model)} (tap to switch)") }, onClick = {
+                    dismiss()
+                    if (session.game != null && session.setup.input == InputMode.CAMERA) session.cameraMemory = camera.remembered()
+                    val next = models[(models.indexOf(model) + 1) % models.size]
+                    TfliteDartNet.choose(context, next)
+                    model = next
+                    saved = "Detector: ${TfliteDartNet.label(next)}"
                 })
             }
             DropdownMenuItem(text = { Text("Setup tips") }, onClick = { dismiss(); tips = true })
