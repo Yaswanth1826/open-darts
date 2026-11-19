@@ -12,15 +12,29 @@ android {
         applicationId = "com.opendarts"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = (findProperty("versionName") as String?) ?: "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // The upload key never lives in the repository: it comes from the environment (see .github/workflows/release-bundle.yml).
+    val uploadKeystore = System.getenv("OPENDARTS_KEYSTORE")?.takeIf { it.isNotBlank() }?.let(::file)
+    signingConfigs {
+        if (uploadKeystore != null) {
+            create("upload") {
+                storeFile = uploadKeystore
+                storePassword = System.getenv("OPENDARTS_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("OPENDARTS_KEY_ALIAS")
+                keyPassword = System.getenv("OPENDARTS_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (uploadKeystore != null) signingConfig = signingConfigs.getByName("upload")
         }
     }
     compileOptions {

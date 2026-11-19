@@ -170,7 +170,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
                 camera.saveFrame("misread") { name -> saved = if (name.isEmpty()) "Could not save the frame" else "Saved to Pictures/OpenDarts" }
             })
             DropdownMenuItem(
-                text = { Text((if (collecting) "\u2713 " else "") + "Collect training photos" + if (status.collected > 0) " (${status.collected})" else "") },
+                text = { Text((if (collecting) "\u2713 " else "") + "Save training photos to Gallery" + if (status.collected > 0) " (${status.collected})" else "") },
                 onClick = { dismiss(); collecting = !collecting; camera.collecting = collecting },
             )
             if (status.collected > 0) {

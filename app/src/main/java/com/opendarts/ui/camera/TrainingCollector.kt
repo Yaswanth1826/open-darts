@@ -29,7 +29,10 @@ class TrainingCollector(private val context: Context) {
     private val prefs = context.getSharedPreferences("training", Context.MODE_PRIVATE)
 
     @Volatile private var released = false
-    @Volatile var enabled = prefs.getBoolean(ENABLED, true)
+    // Photos of a player's room are only saved when they choose so; developer (debuggable) builds keep collecting by default.
+    private val debuggable = context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+
+    @Volatile var enabled = prefs.getBoolean(ENABLED, debuggable)
         set(value) { field = value; prefs.edit().putBoolean(ENABLED, value).apply() }
 
     fun count(): Int = prefs.getInt(COUNT, 0)

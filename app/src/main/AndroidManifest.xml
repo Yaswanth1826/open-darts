@@ -5,7 +5,7 @@
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
     </queries>
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:label="Open Darts"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
