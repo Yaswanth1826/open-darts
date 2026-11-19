@@ -29,11 +29,8 @@ class TrainingCollector(private val context: Context) {
     private val prefs = context.getSharedPreferences("training", Context.MODE_PRIVATE)
 
     @Volatile private var released = false
-    // Photos of a player's room are only saved when they choose so; developer (debuggable) builds keep collecting by default.
-    private val debuggable = context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
-
-    @Volatile var enabled = prefs.getBoolean(ENABLED, debuggable)
-        set(value) { field = value; prefs.edit().putBoolean(ENABLED, value).apply() }
+    @Volatile var enabled = isOn(context)
+        set(value) { field = value; setOn(context, value) }
 
     fun count(): Int = prefs.getInt(COUNT, 0)
 
@@ -118,6 +115,16 @@ class TrainingCollector(private val context: Context) {
         const val FIX_RESERVE = 100
         private const val ENABLED = "enabled"
         private const val COUNT = "count"
+
+        /** Photos of a player's room are only saved when they choose so; developer (debuggable) builds collect by default. */
+        fun isOn(context: Context): Boolean {
+            val debuggable = context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+            return context.getSharedPreferences("training", Context.MODE_PRIVATE).getBoolean(ENABLED, debuggable)
+        }
+
+        fun setOn(context: Context, on: Boolean) {
+            context.getSharedPreferences("training", Context.MODE_PRIVATE).edit().putBoolean(ENABLED, on).apply()
+        }
 
         /** The note stored with a corrected dart: what the camera scored ([was], null if it saw nothing) and what the player says it is ([now], null if there was none). */
         fun fixNote(was: String?, now: String?) = "fix-${was ?: "missed"}-${now ?: "removed"}"

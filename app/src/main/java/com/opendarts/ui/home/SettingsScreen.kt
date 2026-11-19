@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opendarts.billing.FREE_CAMERA_GAMES
 import com.opendarts.billing.LocalEntitlements
+import com.opendarts.ui.camera.TrainingCollector
 import com.opendarts.ui.common.SectionLabel
 import com.opendarts.ui.common.SetupTipsDialog
 import com.opendarts.ui.common.SoundSetting
@@ -42,6 +43,7 @@ fun SettingsScreen(entitlements: LocalEntitlements) {
     var plan by remember { mutableStateOf(entitlements.access()) }
     var simulate by remember { mutableStateOf(entitlements.simulateFreePlan) }
     var tips by remember { mutableStateOf(false) }
+    var photos by remember { mutableStateOf(TrainingCollector.isOn(context)) }
     var notices by remember { mutableStateOf(false) }
     val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
     Column(Modifier.fillMaxSize()) {
@@ -85,6 +87,20 @@ fun SettingsScreen(entitlements: LocalEntitlements) {
             }
             Row(Modifier.fillMaxWidth().panel(18.dp).clickable { tips = true }.padding(horizontal = 16.dp, vertical = 16.dp)) {
                 Text("Camera setup tips", color = Pal.Text, fontFamily = Display, fontSize = 17.sp)
+            }
+            SectionLabel("Help improve camera scoring", Modifier.padding(top = 12.dp))
+            Row(Modifier.fillMaxWidth().panel(18.dp).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Save camera photos", color = Pal.Text, fontFamily = Display, fontSize = 17.sp)
+                    Text(
+                        "Off by default. When on, camera games save photos of your board to Pictures/OpenDarts/Training on this phone. Nothing is uploaded; you can delete them any time from the Gallery.",
+                        color = Pal.Muted, fontFamily = Body, fontSize = 13.sp,
+                    )
+                }
+                Switch(
+                    checked = photos, onCheckedChange = { photos = it; TrainingCollector.setOn(context, it) },
+                    colors = SwitchDefaults.colors(checkedTrackColor = Pal.Lime, checkedThumbColor = Pal.OnLime, uncheckedTrackColor = Pal.Raised, uncheckedThumbColor = Pal.Muted, uncheckedBorderColor = Pal.Line),
+                )
             }
             SectionLabel("About", Modifier.padding(top = 12.dp))
             Row(Modifier.fillMaxWidth().panel(18.dp).clickable { notices = true }.padding(horizontal = 16.dp, vertical = 16.dp)) {
