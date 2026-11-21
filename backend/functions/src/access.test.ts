@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { accessOf, emptyUser, FREE_CAMERA_GAMES, judgeSubscription, startCameraGame } from "./access";
+import { accessOf, emptyUser, FREE_CAMERA_GAMES, judgeSubscription, sessionAllowed, startCameraGame, validSessionId } from "./access";
 
 const NOW = 1_800_000_000_000;
 const DAY = 86_400_000;
@@ -80,4 +80,24 @@ test("a different product is refused", () => {
 test("a subscription whose end has passed is refused even when marked active", () => {
   const v = judgeSubscription(sub("SUBSCRIPTION_STATE_ACTIVE", NOW - 1), "camera_monthly", "acc", NOW);
   assert.deepEqual(v, { ok: false, reason: "expired" });
+});
+
+test("an account nobody has claimed yet accepts any session", () => {
+  assert.equal(sessionAllowed(emptyUser(), "anything-at-all-1234"), true);
+  assert.equal(sessionAllowed(emptyUser(), undefined), true);
+});
+
+test("only the newest sign-in may use a claimed account", () => {
+  const user = { ...emptyUser(), sessionId: "newest-session-0123456789" };
+  assert.equal(sessionAllowed(user, "newest-session-0123456789"), true);
+  assert.equal(sessionAllowed(user, "older-session-0123456789"), false);
+  assert.equal(sessionAllowed(user, undefined), false);
+  assert.equal(sessionAllowed(user, 42), false);
+});
+
+test("session ids must be long enough to be unguessable", () => {
+  assert.equal(validSessionId("short"), false);
+  assert.equal(validSessionId("x".repeat(101)), false);
+  assert.equal(validSessionId(123), false);
+  assert.equal(validSessionId("0f8fad5b-d9cb-469f-a165-70867728950e"), true);
 });

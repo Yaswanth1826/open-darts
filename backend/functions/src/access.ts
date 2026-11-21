@@ -7,6 +7,8 @@ export interface UserState {
   freeUsed: number;
   /** Subscription end in epoch milliseconds, 0 when there is none. */
   premiumUntil: number;
+  /** The one sign-in that may use the account right now; the newest sign-in replaces it. Absent until the first claim. */
+  sessionId?: string;
 }
 
 export interface Access {
@@ -26,6 +28,15 @@ export function accessOf(user: UserState, deviceUsed: number, now: number): Acce
   const used = Math.max(user.freeUsed, deviceUsed);
   return { premium, freeLeft: Math.max(0, FREE_CAMERA_GAMES - used), premiumUntil: user.premiumUntil };
 }
+
+/** Only the newest sign-in may use an account: a request from an older one is refused so that app signs out. */
+export function sessionAllowed(user: UserState, sessionId: unknown): boolean {
+  if (!user.sessionId) return true;
+  return typeof sessionId === "string" && sessionId === user.sessionId;
+}
+
+/** A session id the app made up for itself: long enough that it cannot be guessed. */
+export const validSessionId = (id: unknown): id is string => typeof id === "string" && id.length >= 16 && id.length <= 100;
 
 export interface StartResult {
   allowed: boolean;

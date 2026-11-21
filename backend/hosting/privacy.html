@@ -28,6 +28,8 @@
     <tr><td>How many free camera games you have used</td><td>To enforce the free trial.</td></tr>
     <tr><td>Your subscription status: the end date of the paid period and the Google Play purchase token</td><td>To unlock camera scoring while you are subscribed, and to link a purchase to one account only.</td></tr>
     <tr><td>A device identifier (Android ID). It is converted to a one-way hash on our server and the original is not kept</td><td>To stop the free trial being reset by deleting and re-creating accounts on the same phone.</td></tr>
+    <tr><td>An anonymous random session ID, stored on your phone and on our server</td><td>To allow an account to be used on one device at a time: signing in on a new device signs the previous one out.</td></tr>
+    <tr><td>A Google Play Integrity / Firebase App Check token, issued by Google, which tells us whether the request comes from the genuine app on a genuine device</td><td>To protect the service against fraud and abuse, such as modified copies of the app and automated free-trial farming. We receive only the pass or fail result.</td></tr>
   </table>
   <p>We do not collect your location, contacts, camera images, microphone audio or advertising identifiers. The app contains no ads and no advertising or analytics tools.</p>
 

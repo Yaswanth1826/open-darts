@@ -1,5 +1,7 @@
 package com.opendarts.ui.home
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -107,12 +109,27 @@ fun SettingsScreen(entitlements: RemoteEntitlements, billing: PlayBilling) {
     }
     if (tips) SetupTipsDialog { tips = false }
     if (confirmDelete) {
+        val subscribed = entitlements.access().premium && !entitlements.isDebugBuild
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("Delete your account?") },
-            text = { Text("This removes your account and subscription link from our server. Cancel the subscription itself in Google Play. Games and history on this phone are kept.") },
+            text = {
+                Text(
+                    if (subscribed) "You have an active subscription. Deleting your account does NOT cancel it, so you would keep being charged. Cancel it in Google Play first. Games and history on this phone are kept."
+                    else "This removes your account and subscription link from our server. Games and history on this phone are kept.",
+                )
+            },
             confirmButton = { TextButton(onClick = { confirmDelete = false; context.findActivity()?.let(entitlements::deleteAccount) }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+            dismissButton = {
+                Row {
+                    if (subscribed) TextButton(onClick = {
+                        confirmDelete = false
+                        val link = "https://play.google.com/store/account/subscriptions?sku=${PlayBilling.PRODUCT}&package=${context.packageName}"
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link)))
+                    }) { Text("Manage subscription") }
+                    TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+                }
+            },
         )
     }
     if (notices) {

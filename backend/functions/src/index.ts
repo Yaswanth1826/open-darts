@@ -2,11 +2,11 @@ import { createHash } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
-import { defineString } from "firebase-functions/params";
+import { defineBoolean, defineString } from "firebase-functions/params";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onMessagePublished } from "firebase-functions/v2/pubsub";
-import { accessOf, emptyUser, judgeSubscription, PlaySubscription, startCameraGame as decideStart, UserState } from "./access";
+import { accessOf, emptyUser, judgeSubscription, PlaySubscription, sessionAllowed, startCameraGame as decideStart, UserState, validSessionId } from "./access";
 
 initializeApp();
 // Next to the Firestore database (eur3); the app calls the same region.
@@ -15,6 +15,8 @@ const db = getFirestore();
 
 const packageName = defineString("PLAY_PACKAGE", { default: "com.opendarts" });
 const productId = defineString("PLAY_PRODUCT", { default: "camera_monthly" });
+// Turn on (APPCHECK_ENFORCE=true in functions/.env) once Play builds send App Check tokens; refuses calls from apps Google cannot vouch for.
+const enforceAppCheck = defineBoolean("APPCHECK_ENFORCE", { default: false });
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 // googleapis is slow to load, so it is only loaded when a purchase is checked (keeps deployment and cold starts quick).
@@ -23,9 +25,17 @@ const publisher = async () => {
   return google.androidpublisher({ version: "v3", auth: new google.auth.GoogleAuth({ scopes: ["https://www.googleapis.com/auth/androidpublisher"] }) });
 };
 
-function uidOf(request: { auth?: { uid: string } | undefined }): string {
+function uidOf(request: { auth?: { uid: string } | undefined; app?: unknown }): string {
+  if (enforceAppCheck.value() && !request.app) throw new HttpsError("failed-precondition", "app-check");
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
   return request.auth.uid;
+}
+
+const replaced = () => new HttpsError("failed-precondition", "session-replaced");
+
+/** Refuses the request when the account has been signed in somewhere else since this sign-in. */
+function assertSession(user: UserState, request: { data?: { sessionId?: unknown } }) {
+  if (!sessionAllowed(user, request.data?.sessionId)) throw replaced();
 }
 
 async function readUser(uid: string): Promise<UserState> {
@@ -38,11 +48,21 @@ const deviceRef = (deviceId: unknown) => {
   return db.doc(`devices/${sha256(deviceId)}`);
 };
 
+/** Called after every sign-in: this sign-in becomes the only one allowed, and any other device is signed out on its next request. */
+export const claimSession = onCall(async (request) => {
+  const uid = uidOf(request);
+  const sessionId = request.data?.sessionId;
+  if (!validSessionId(sessionId)) throw new HttpsError("invalid-argument", "Missing session id.");
+  await db.doc(`users/${uid}`).set({ sessionId, sessionAt: FieldValue.serverTimestamp(), sessionDevice: sha256(String(request.data?.deviceId ?? "")) }, { merge: true });
+  return { ok: true };
+});
+
 /** Where the player stands, without spending anything. */
 export const getAccess = onCall(async (request) => {
   const uid = uidOf(request);
-  const device = await deviceRef(request.data?.deviceId).get();
-  return accessOf(await readUser(uid), (device.data()?.freeUsed as number | undefined) ?? 0, Date.now());
+  const [user, device] = await Promise.all([readUser(uid), deviceRef(request.data?.deviceId).get()]);
+  assertSession(user, request);
+  return accessOf(user, (device.data()?.freeUsed as number | undefined) ?? 0, Date.now());
 });
 
 /** Called once as a camera game starts. The free-game counter lives here, so clearing the app's data does not reset it. */
@@ -53,6 +73,7 @@ export const startCameraGame = onCall(async (request) => {
   return db.runTransaction(async (tx) => {
     const [userSnap, devSnap] = await Promise.all([tx.get(userRef), tx.get(devRef)]);
     const user = { ...emptyUser(), ...(userSnap.data() as Partial<UserState> | undefined) };
+    assertSession(user, request);
     const result = decideStart(user, (devSnap.data()?.freeUsed as number | undefined) ?? 0, Date.now());
     if (result.allowed && !result.access.premium) {
       tx.set(userRef, { freeUsed: result.user.freeUsed }, { merge: true });
@@ -85,6 +106,7 @@ export const verifyPurchase = onCall(async (request) => {
   const uid = uidOf(request);
   const token = request.data?.purchaseToken;
   if (typeof token !== "string" || token.length < 10 || token.length > 2000) throw new HttpsError("invalid-argument", "Missing purchase token.");
+  assertSession(await readUser(uid), request);
   const owner = db.doc(`purchases/${sha256(token)}`);
   const known = await owner.get();
   if (known.exists && known.data()?.uid !== uid) throw new HttpsError("permission-denied", "This purchase belongs to another account.");
@@ -107,6 +129,7 @@ export const playNotification = onMessagePublished("play-rtdn", async (event) =>
 // so deleting and re-creating an account does not hand out new free games.
 export const deleteAccount = onCall(async (request) => {
   const uid = uidOf(request);
+  assertSession(await readUser(uid), request);
   const links = await db.collection("purchases").where("uid", "==", uid).get();
   await Promise.all(links.docs.map((d) => d.ref.delete()));
   await db.collection("users").doc(uid).delete();

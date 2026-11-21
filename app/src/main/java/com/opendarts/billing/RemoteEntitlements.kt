@@ -24,6 +24,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.functions.FirebaseFunctionsException
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -42,6 +43,7 @@ class RemoteEntitlements(context: Context) : EntitlementProvider {
 
     private val auth: FirebaseAuth? = runCatching {
         val firebase = FirebaseApp.getApps(app).firstOrNull() ?: FirebaseApp.initializeApp(app)
+        firebase?.let { AppCheckSetup.install(it) }
         firebase?.let { FirebaseAuth.getInstance(it) }
     }.getOrNull()
 
@@ -84,7 +86,35 @@ class RemoteEntitlements(context: Context) : EntitlementProvider {
     /** Asks the server for the current plan (after reporting any games started while offline). Safe to call any time. */
     fun refresh() {
         val user = auth?.currentUser ?: return
-        flush { call("getAccess", device()) { store(user.uid, it) } }
+        claimed {
+            flush { call("getAccess", device()) { store(user.uid, it) } }
+        }
+    }
+
+    /**
+     * Only one sign-in may use an account at a time. This device makes itself that one (the server then signs the others out)
+     * before anything else is asked of the server; if that cannot be reached yet, nothing else is sent.
+     */
+    private fun claimed(then: () -> Unit) {
+        if (prefs.getBoolean(CLAIMED, false) && prefs.getString(SESSION, null) != null) return then()
+        val id = prefs.getString(SESSION, null) ?: UUID.randomUUID().toString().also { prefs.edit().putString(SESSION, it).apply() }
+        call("claimSession", device()) {
+            prefs.edit().putBoolean(CLAIMED, true).apply()
+            then()
+        }
+    }
+
+    /** The server says the account was signed in somewhere else since: this device is signed out. */
+    private fun replacedElsewhere() {
+        auth?.signOut()
+        forgetSession()
+        busy = false
+        revision++
+        message = "You signed in on another device, so this one was signed out. Sign in again to use it here."
+    }
+
+    private fun forgetSession() {
+        prefs.edit().remove(UID).remove(UNTIL).remove(FREE).remove(PENDING).remove(SESSION).remove(CLAIMED).apply()
     }
 
     private fun flush(then: () -> Unit) {
@@ -108,7 +138,7 @@ class RemoteEntitlements(context: Context) : EntitlementProvider {
     /** Hands a Play purchase token to the server, which checks it with Google and unlocks the camera for this account. */
     fun verifyPurchase(token: String, done: (Boolean) -> Unit = {}) {
         val user = auth?.currentUser ?: return done(false)
-        call("verifyPurchase", mapOf("purchaseToken" to token), onFail = { done(false) }) { answer ->
+        call("verifyPurchase", device().plus("purchaseToken" to token), onFail = { done(false) }) { answer ->
             val ok = answer["ok"] == true
             if (ok) {
                 prefs.edit().putString(UID, user.uid).putLong(UNTIL, (answer["until"] as? Number)?.toLong() ?: 0L).apply()
@@ -134,7 +164,11 @@ class RemoteEntitlements(context: Context) : EntitlementProvider {
                     }
                     val token = GoogleIdTokenCredential.createFrom(credential.data).idToken
                     firebase.signInWithCredential(GoogleAuthProvider.getCredential(token, null))
-                        .addOnSuccessListener { busy = false; revision++; refresh() }
+                        .addOnSuccessListener {
+                            // A new sign-in is a new session, which replaces any other device on this account.
+                            prefs.edit().putString(SESSION, UUID.randomUUID().toString()).putBoolean(CLAIMED, false).apply()
+                            busy = false; revision++; refresh()
+                        }
                         .addOnFailureListener { busy = false; message = "Sign-in failed. Check your connection and try again." }
                 }
 
@@ -148,7 +182,7 @@ class RemoteEntitlements(context: Context) : EntitlementProvider {
 
     fun signOut(activity: Activity) {
         auth?.signOut()
-        prefs.edit().remove(UID).remove(UNTIL).remove(FREE).remove(PENDING).apply()
+        forgetSession()
         revision++
         CredentialManager.create(activity).clearCredentialStateAsync(
             ClearCredentialStateRequest(), null, ContextCompat.getMainExecutor(activity),
@@ -162,7 +196,7 @@ class RemoteEntitlements(context: Context) : EntitlementProvider {
     /** Deletes the account and its server data. The device's free-game count stays, so deleting is no way to get a new trial. */
     fun deleteAccount(activity: Activity) {
         busy = true; message = null
-        call("deleteAccount", emptyMap<String, Any>(), onFail = { busy = false; message = "Could not delete the account. Try again when you are online." }) {
+        call("deleteAccount", device(), onFail = { busy = false; message = "Could not delete the account. Try again when you are online." }) {
             busy = false
             signOut(activity)
             message = "Your account was deleted."
@@ -170,16 +204,27 @@ class RemoteEntitlements(context: Context) : EntitlementProvider {
     }
 
     private fun device(): Map<String, Any> {
+        val session = prefs.getString(SESSION, null)
         val id = Settings.Secure.getString(app.contentResolver, Settings.Secure.ANDROID_ID)?.takeIf { it.length >= 8 }
             ?: prefs.getString(FALLBACK_DEVICE, null) ?: UUID.randomUUID().toString().also { prefs.edit().putString(FALLBACK_DEVICE, it).apply() }
-        return mapOf("deviceId" to id)
+        return if (session != null) mapOf("deviceId" to id, "sessionId" to session) else mapOf("deviceId" to id)
     }
 
     private fun call(name: String, data: Map<String, Any>, onFail: (Exception) -> Unit = {}, onOk: (Map<*, *>) -> Unit) {
         runCatching {
             FirebaseFunctions.getInstance(REGION).getHttpsCallable(name).call(data)
                 .addOnSuccessListener { onOk(it.getData() as? Map<*, *> ?: emptyMap<Any, Any>()) }
-                .addOnFailureListener(onFail)
+                .addOnFailureListener { e ->
+                    val code = (e as? FirebaseFunctionsException)?.code
+                    when {
+                        code == FirebaseFunctionsException.Code.FAILED_PRECONDITION && e.message == "session-replaced" -> { onFail(e); replacedElsewhere() }
+                        code == FirebaseFunctionsException.Code.FAILED_PRECONDITION && e.message == "app-check" -> {
+                            onFail(e)
+                            message = "This copy of Open Darts could not be verified. Install it from Google Play."
+                        }
+                        else -> onFail(e)
+                    }
+                }
         }.onFailure { onFail(it as? Exception ?: Exception(it)) }
     }
 
@@ -192,5 +237,7 @@ class RemoteEntitlements(context: Context) : EntitlementProvider {
         const val FREE = "free"
         const val PENDING = "pending"
         const val FALLBACK_DEVICE = "device"
+        const val SESSION = "session"
+        const val CLAIMED = "claimed"
     }
 }
