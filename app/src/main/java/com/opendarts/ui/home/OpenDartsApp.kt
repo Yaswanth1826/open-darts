@@ -69,7 +69,6 @@ fun OpenDartsApp() {
                         } ?: "",
                     )
                     Tab.STATS -> StatsScreen(history)
-                    Tab.PLAYERS -> PlayersScreen()
                     Tab.SETTINGS -> SettingsScreen(entitlements, billing)
                 }
             }

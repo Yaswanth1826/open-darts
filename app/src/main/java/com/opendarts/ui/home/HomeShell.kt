@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -34,7 +33,6 @@ import com.opendarts.ui.theme.Pal
 enum class Tab(val label: String, val icon: ImageVector) {
     PLAY("Play", Icons.Default.PlayArrow),
     STATS("Stats", Icons.Default.BarChart),
-    PLAYERS("Players", Icons.Default.Group),
     SETTINGS("Settings", Icons.Default.Settings),
 }
 
