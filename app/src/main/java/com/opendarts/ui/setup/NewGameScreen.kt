@@ -151,7 +151,9 @@ private fun RulesSection(setup: GameSetup, access: Access?, onChange: (GameSetup
             Segmented(listOf(InputMode.CAMERA, InputMode.MANUAL), setup.input, { if (it == InputMode.CAMERA) "Auto camera" else "Manual keypad" }, { onChange(setup.copy(input = it)) })
             if (setup.input == InputMode.CAMERA && access != null && !access.premium) {
                 Text(
-                    if (access.freeLeft > 0) "${access.freeLeft} of $FREE_CAMERA_GAMES free camera games left" else "No free camera games left",
+                    if (!access.signedIn) "Sign in with Google to use the camera"
+                    else if (!access.known) "Checking your plan\u2026"
+                    else if (access.freeLeft > 0) "${access.freeLeft} of $FREE_CAMERA_GAMES free camera games left" else "No free camera games left",
                     color = Pal.Muted, fontFamily = Body, fontSize = 13.sp,
                 )
             }

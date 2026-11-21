@@ -54,6 +54,10 @@ android {
     testOptions { unitTests.isIncludeAndroidResources = true }
 }
 
+// Sign-in and purchases need the Firebase config, which stays out of git. Without it the app still builds and the camera
+// stays locked in release builds (debug builds are unlocked for testing).
+if (file("google-services.json").exists()) apply(plugin = "com.google.gms.google-services")
+
 dependencies {
     implementation(project(":core"))
     val composeBom = platform("androidx.compose:compose-bom:2025.02.00")
@@ -74,6 +78,13 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.4.1")
     implementation("androidx.camera:camera-view:1.4.1")
     implementation("org.tensorflow:tensorflow-lite:2.16.1")
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-functions")
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    implementation("com.android.billingclient:billing:7.1.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("androidx.test.ext:junit:1.2.1")

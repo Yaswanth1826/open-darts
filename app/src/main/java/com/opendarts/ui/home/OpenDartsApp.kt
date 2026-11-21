@@ -14,7 +14,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.opendarts.billing.LocalEntitlements
+import com.opendarts.billing.PlayBilling
+import com.opendarts.billing.RemoteEntitlements
 import com.opendarts.game.x01.X01Config
 import com.opendarts.session.GameKind
 import com.opendarts.session.GameSession
@@ -33,8 +34,13 @@ private enum class Page { HOME, NEW, GAME, CALIBRATE }
 fun OpenDartsApp() {
     val session: GameSession = viewModel()
     val context = LocalContext.current
-    val entitlements = remember { LocalEntitlements(context) }
+    val entitlements = remember { RemoteEntitlements(context) }
+    val billing = remember { PlayBilling(context, entitlements) }
     session.entitlements = entitlements
+    // Refresh the plan whenever the account changes, and look for a subscription bought earlier.
+    LaunchedEffect(entitlements.signedIn) {
+        if (entitlements.signedIn) { entitlements.refresh(); billing.connect() }
+    }
     val history = remember { HistoryStore(context.applicationContext) }
     session.history = history
     LaunchedEffect(session) { session.attach(GameStore(context.applicationContext)) }
@@ -64,7 +70,7 @@ fun OpenDartsApp() {
                     )
                     Tab.STATS -> StatsScreen(history)
                     Tab.PLAYERS -> PlayersScreen()
-                    Tab.SETTINGS -> SettingsScreen(entitlements)
+                    Tab.SETTINGS -> SettingsScreen(entitlements, billing)
                 }
             }
             Page.NEW -> NewGameScreen(session, onStart = { page = Page.GAME }, onBack = { page = Page.HOME })
@@ -77,6 +83,7 @@ fun OpenDartsApp() {
         }
         if (session.paywall) {
             PaywallDialog(
+                entitlements, billing,
                 onKeypad = { session.draft = session.draft.copy(input = InputMode.MANUAL); session.paywall = false },
                 onDismiss = { session.paywall = false },
             )

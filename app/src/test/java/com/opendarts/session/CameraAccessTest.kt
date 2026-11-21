@@ -69,4 +69,24 @@ class CameraAccessTest {
         repeat(10) { assertTrue(s.start(camera)) }
         assertEquals(0, fake.used)
     }
+
+    @Test fun theCameraNeedsAKnownSignedInPlanWithGamesLeftOrASubscription() {
+        assertTrue(Access(premium = false, freeLeft = 1).canUseCamera)
+        assertTrue(Access(premium = true, freeLeft = 0).canUseCamera)
+        assertFalse(Access(premium = false, freeLeft = 0).canUseCamera)
+        assertFalse(Access(premium = true, freeLeft = 3, signedIn = false).canUseCamera)
+        assertFalse(Access(premium = true, freeLeft = 3, known = false).canUseCamera)
+    }
+
+    @Test fun aSignedOutPlayerGetsThePaywallAndKeepsTheirGame() {
+        val s = GameSession().also {
+            it.entitlements = object : EntitlementProvider {
+                override fun access() = Access(false, FREE_CAMERA_GAMES, signedIn = false)
+                override fun useFreeGame() = error("must not count a refused game")
+            }
+        }
+        assertFalse(s.start(camera))
+        assertTrue(s.paywall)
+        assertTrue(s.start(keypad))
+    }
 }

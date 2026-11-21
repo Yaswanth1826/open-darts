@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { defineString } from "firebase-functions/params";
 import { setGlobalOptions } from "firebase-functions/v2";
@@ -100,4 +101,15 @@ export const playNotification = onMessagePublished("play-rtdn", async (event) =>
   const owner = await db.doc(`purchases/${sha256(token)}`).get();
   const uid = owner.data()?.uid as string | undefined;
   if (uid) await refresh(uid, token);
+});
+
+// Play policy: the app must let people delete their account. The per-device free-game counter is kept on purpose,
+// so deleting and re-creating an account does not hand out new free games.
+export const deleteAccount = onCall(async (request) => {
+  const uid = uidOf(request);
+  const links = await db.collection("purchases").where("uid", "==", uid).get();
+  await Promise.all(links.docs.map((d) => d.ref.delete()));
+  await db.collection("users").doc(uid).delete();
+  await getAuth().deleteUser(uid);
+  return { ok: true };
 });
