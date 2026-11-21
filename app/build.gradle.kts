@@ -20,6 +20,13 @@ android {
     // The upload key never lives in the repository: it comes from the environment (see .github/workflows/release-bundle.yml).
     val uploadKeystore = System.getenv("OPENDARTS_KEYSTORE")?.takeIf { it.isNotBlank() }?.let(::file)
     signingConfigs {
+        // A fixed debug key, so every build (local or CI) has the same SHA-1 and Google sign-in works. It protects nothing.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         if (uploadKeystore != null) {
             create("upload") {
                 storeFile = uploadKeystore
