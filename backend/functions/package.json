@@ -1,7 +1,7 @@
-﻿{
+{
   "name": "open-darts-functions",
   "private": true,
-  "engines": { "node": "20" },
+  "engines": { "node": "22" },
   "main": "lib/index.js",
   "scripts": {
     "build": "tsc",

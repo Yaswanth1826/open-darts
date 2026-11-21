@@ -1,20 +1,26 @@
-﻿import { createHash } from "node:crypto";
+import { createHash } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { defineString } from "firebase-functions/params";
+import { setGlobalOptions } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onMessagePublished } from "firebase-functions/v2/pubsub";
-import { google } from "googleapis";
 import { accessOf, emptyUser, judgeSubscription, PlaySubscription, startCameraGame as decideStart, UserState } from "./access";
 
 initializeApp();
+// Next to the Firestore database (eur3); the app calls the same region.
+setGlobalOptions({ region: "europe-west1", maxInstances: 10 });
 const db = getFirestore();
 
 const packageName = defineString("PLAY_PACKAGE", { default: "com.opendarts" });
 const productId = defineString("PLAY_PRODUCT", { default: "camera_monthly" });
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
-const publisher = () => google.androidpublisher({ version: "v3", auth: new google.auth.GoogleAuth({ scopes: ["https://www.googleapis.com/auth/androidpublisher"] }) });
+// googleapis is slow to load, so it is only loaded when a purchase is checked (keeps deployment and cold starts quick).
+const publisher = async () => {
+  const { google } = await import("googleapis");
+  return google.androidpublisher({ version: "v3", auth: new google.auth.GoogleAuth({ scopes: ["https://www.googleapis.com/auth/androidpublisher"] }) });
+};
 
 function uidOf(request: { auth?: { uid: string } | undefined }): string {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
@@ -57,7 +63,7 @@ export const startCameraGame = onCall(async (request) => {
 
 /** Looks the subscription up at Google, stores the result for [uid] and acknowledges the purchase. */
 async function refresh(uid: string, token: string): Promise<{ ok: boolean; reason?: string; until: number }> {
-  const api = publisher();
+  const api = await publisher();
   const { data } = await api.purchases.subscriptionsv2.get({ packageName: packageName.value(), token });
   const sub = data as PlaySubscription & { lineItems?: Array<{ productId?: string | null }> };
   const verdict = judgeSubscription(sub, productId.value(), sha256(uid), Date.now());
