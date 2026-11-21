@@ -67,8 +67,8 @@ fun PlayScreen(onMode: (GameKind) -> Unit, onQuick: () -> Unit, onResume: (() ->
             SectionLabel("Game modes")
             ModeRow("X01", "301, 501, 701 or your own score. Count down to zero.", Icons.Default.Adjust, Pal.Lime) { onMode(GameKind.X01) }
             ModeRow("Cricket", "Close 15 to 20 and the bull. Standard, cut-throat or no-score.", Icons.Default.Grid3x3, Pal.Sky) { onMode(GameKind.CRICKET) }
-            ModeRow("Practice", "Around the Clock, Count Up and the JDC Challenge.", Icons.Default.Timer, Pal.Amber) { onMode(GameKind.AROUND_THE_CLOCK) }
-            ModeRow("Party", "More games are on the way.", Icons.Default.Celebration, Pal.Violet, onClick = null)
+            ModeRow("Practice", "Bob's 27, checkout practice, Around the Clock, Count Up and more.", Icons.Default.Timer, Pal.Amber) { onMode(GameKind.AROUND_THE_CLOCK) }
+            ModeRow("Party", "Shanghai, Killer, Halve It and Baseball.", Icons.Default.Celebration, Pal.Violet) { onMode(GameKind.SHANGHAI) }
             TipsRow { tips = true }
         }
     }

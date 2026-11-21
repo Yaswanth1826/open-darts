@@ -42,7 +42,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opendarts.game.cricket.CricketMode
+import com.opendarts.game.practice.CheckoutLevel
 import com.opendarts.game.x01.InOut
+import com.opendarts.session.Category
 import com.opendarts.session.GameKind
 import com.opendarts.session.GameSession
 import com.opendarts.session.GameSetup
@@ -50,6 +52,9 @@ import com.opendarts.billing.Access
 import com.opendarts.billing.FREE_CAMERA_GAMES
 import com.opendarts.session.InputMode
 import com.opendarts.session.PlayerStore
+import com.opendarts.session.category
+import com.opendarts.session.kinds
+import com.opendarts.session.minPlayers
 import com.opendarts.session.Roster
 import com.opendarts.ui.common.Avatar
 import com.opendarts.ui.common.OptionChip
@@ -65,7 +70,6 @@ import com.opendarts.ui.theme.Pal
 
 private enum class Match { OFF, LEGS, SETS }
 
-private val kinds = listOf(GameKind.X01, GameKind.CRICKET, GameKind.AROUND_THE_CLOCK, GameKind.COUNT_UP, GameKind.JDC_CHALLENGE)
 private val presets = listOf(301, 501, 701)
 
 /** One screen to build a game: what to play, the rules, how it is scored and who is throwing. */
@@ -76,7 +80,7 @@ fun NewGameScreen(session: GameSession, onStart: () -> Unit, onBack: () -> Unit)
     var roster by remember { mutableStateOf(store.load()) }
     var editing by remember { mutableStateOf<Int?>(null) }
     val setup = session.draft
-    val ready = roster.selected.isNotEmpty()
+    val ready = roster.selected.size >= setup.kind.minPlayers
     val landscape = LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
 
     fun update(new: Roster) { roster = new; store.save(new) }
@@ -91,7 +95,7 @@ fun NewGameScreen(session: GameSession, onStart: () -> Unit, onBack: () -> Unit)
             }
             val access = session.entitlements?.access()
             val rules: @Composable () -> Unit = { RulesSection(setup, access) { session.draft = it } }
-            val players: @Composable () -> Unit = { PlayersSection(roster, onToggle = ::toggle, onEdit = { editing = it }) }
+            val players: @Composable () -> Unit = { PlayersSection(roster, setup.kind.minPlayers, onToggle = ::toggle, onEdit = { editing = it }) }
             if (landscape) {
                 Row(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     Column(Modifier.weight(1.2f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) { rules() }
@@ -124,8 +128,10 @@ fun NewGameScreen(session: GameSession, onStart: () -> Unit, onBack: () -> Unit)
 private fun RulesSection(setup: GameSetup, access: Access?, onChange: (GameSetup) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Group("Game") {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                kinds.forEach { k -> OptionChip(k.title, k == setup.kind, { onChange(setup.copy(kind = k)) }) }
+            Segmented(Category.entries, setup.kind.category, { it.title }, { c -> if (c != setup.kind.category) onChange(setup.copy(kind = c.kinds.first())) })
+            val sameCategory = setup.kind.category.kinds
+            if (sameCategory.size > 1) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                sameCategory.forEach { k -> OptionChip(k.title, k == setup.kind, { onChange(setup.copy(kind = k)) }) }
             }
             Text(setup.kind.blurb, color = Pal.Muted, fontFamily = Body, fontSize = 14.sp)
         }
@@ -145,7 +151,24 @@ private fun RulesSection(setup: GameSetup, access: Access?, onChange: (GameSetup
             GameKind.COUNT_UP -> Group("Rounds") {
                 Segmented(listOf(3, 5, 8, 10, 15), setup.countUpRounds, { it.toString() }, { onChange(setup.copy(countUpRounds = it)) })
             }
-            GameKind.JDC_CHALLENGE -> Text("Fixed format: 57 darts over 19 rounds, maximum score 3,380.", color = Pal.Muted, fontFamily = Body, fontSize = 14.sp)
+            GameKind.JDC_CHALLENGE -> Fixed("Fixed format: 57 darts over 19 rounds, maximum score 3,380.")
+            GameKind.BOBS_27 -> Fixed("Fixed format: start on 27, 20 rounds from D1 to D20. A hit adds double the number, a visit with no hit takes it away. Below zero you are out; the highest score wins.")
+            GameKind.CHECKOUT_PRACTICE -> {
+                Group("Level") {
+                    Segmented(CheckoutLevel.entries, setup.checkoutLevel, { it.label }, { onChange(setup.copy(checkoutLevel = it)) })
+                }
+                Group("Checkouts to try") {
+                    Segmented(listOf(5, 10, 15, 20), setup.checkoutAttempts, { it.toString() }, { onChange(setup.copy(checkoutAttempts = it)) })
+                }
+                Fixed("Easy 2-60, medium 61-110, hard 111-170. Each round everyone gets the same number, double out, three darts. Every checkout is a point.")
+            }
+            GameKind.SHANGHAI -> {
+                Group("Rounds") { Segmented(listOf(7, 20), setup.shanghaiRounds, { if (it == 7) "7 (1 to 7)" else "20 (1 to 20)" }, { onChange(setup.copy(shanghaiRounds = it)) }) }
+                Fixed("Round n scores only hits on number n. A single, double and treble in one visit ends the game at once.")
+            }
+            GameKind.BASEBALL -> Fixed("Fixed format: 9 innings, inning n is number n. Runs: single 1, double 2, treble 3. Most runs wins.")
+            GameKind.HALVE_IT -> Fixed("Fixed format: start on 40. Targets: 15, 16, any double, 17, 18, any treble, 19, 20, bull. Miss them all in a visit and your score is halved.")
+            GameKind.KILLER -> Fixed("Everyone gets a number and 3 lives. Your own double makes you a killer; a killer's hit on another player's double takes a life. Last one standing wins.")
         }
         Group("Scoring") {
             Segmented(listOf(InputMode.CAMERA, InputMode.MANUAL), setup.input, { if (it == InputMode.CAMERA) "Auto camera" else "Manual keypad" }, { onChange(setup.copy(input = it)) })
@@ -160,6 +183,9 @@ private fun RulesSection(setup: GameSetup, access: Access?, onChange: (GameSetup
         }
     }
 }
+
+@Composable
+private fun Fixed(text: String) = Text(text, color = Pal.Muted, fontFamily = Body, fontSize = 14.sp)
 
 @Composable
 private fun X01Rules(setup: GameSetup, onChange: (GameSetup) -> Unit) {
@@ -207,10 +233,10 @@ private fun Step(icon: androidx.compose.ui.graphics.vector.ImageVector, descript
 }
 
 @Composable
-private fun PlayersSection(roster: Roster, onToggle: (Int) -> Unit, onEdit: (Int) -> Unit) {
+private fun PlayersSection(roster: Roster, minPlayers: Int, onToggle: (Int) -> Unit, onEdit: (Int) -> Unit) {
     Group("Players") {
         Text(
-            if (roster.selected.isEmpty()) "Pick at least one player." else "Throwing order follows the numbers. Tap a chosen player to rename or remove them.",
+            if (roster.selected.size < minPlayers) "Pick at least $minPlayers ${if (minPlayers == 1) "player" else "players"}." else "Throwing order follows the numbers. Tap a chosen player to rename or remove them.",
             color = Pal.Muted, fontFamily = Body, fontSize = 14.sp,
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -47,6 +47,24 @@ class GameScreenTest {
     @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
     fun keypadScoreUpdatesInPortrait() = play(shotName = "manual-portrait")
 
+    @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
+    fun BOBS_27_screen() = play(GameKind.BOBS_27, "game-bobs_27")
+
+    @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
+    fun CHECKOUT_PRACTICE_screen() = play(GameKind.CHECKOUT_PRACTICE, "game-checkout_practice")
+
+    @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
+    fun SHANGHAI_screen() = play(GameKind.SHANGHAI, "game-shanghai")
+
+    @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
+    fun BASEBALL_screen() = play(GameKind.BASEBALL, "game-baseball")
+
+    @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
+    fun HALVE_IT_screen() = play(GameKind.HALVE_IT, "game-halve_it")
+
+    @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
+    fun KILLER_screen() = play(GameKind.KILLER, "game-killer")
+
     @Test @Config(qualifiers = "w700dp-h360dp-land-xxhdpi")
     fun keypadScoreUpdatesInLandscape() = play(shotName = "manual-landscape")
 

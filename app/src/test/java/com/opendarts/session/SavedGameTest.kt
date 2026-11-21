@@ -4,6 +4,9 @@ import com.opendarts.game.cricket.CricketMode
 import com.opendarts.game.engine.GameLog
 import com.opendarts.game.model.DartHit
 import com.opendarts.game.practice.AroundTheClockConfig
+import com.opendarts.game.practice.CheckoutLevel
+import com.opendarts.game.party.KillerGame
+import com.opendarts.game.practice.CheckoutPracticeGame
 import com.opendarts.game.x01.InOut
 import com.opendarts.game.x01.X01Config
 import org.junit.Assert.assertEquals
@@ -35,6 +38,40 @@ class SavedGameTest {
     }
 
     @Test
+    fun theNewGamesSettingsAndSeedSurviveToo() {
+        val s = GameSetup(kind = GameKind.CHECKOUT_PRACTICE, checkoutLevel = CheckoutLevel.HARD, checkoutAttempts = 15, shanghaiRounds = 20, seed = -123456)
+        assertEquals(s, SetupCodec.decode(SetupCodec.encode(s)))
+    }
+
+    @Test
+    fun aSaveFromBeforeTheNewGamesStillLoads() {
+        val old = SetupCodec.encode(setup).lines().filterNot { it.substringBefore('=') in setOf("checkout", "tries", "shanghai", "seed") }.joinToString("\n")
+        assertEquals(setup, SetupCodec.decode(old))
+    }
+
+    @Test
+    fun gamesWithRandomNumbersResumeWithTheSameNumbers() {
+        for (kind in listOf(GameKind.KILLER, GameKind.CHECKOUT_PRACTICE)) {
+            val memory = Memory()
+            val first = GameSession().also { it.attach(memory); it.start(GameSetup(kind = kind, playerNames = listOf("A", "B", "C"), input = InputMode.MANUAL)) }
+            first.throwDart(DartHit.single(20)); first.throwDart(DartHit.double(10)); first.nextPlayer(); first.throwDart(DartHit.treble(19))
+            val second = GameSession().also { it.attach(memory) }
+            assertEquals(first.setup.seed, second.setup.seed)
+            assertEquals(first.game!!.gameState, second.game!!.gameState)
+            (first.game as? KillerGame)?.let { assertEquals(it.gameState.numbers, (second.game as KillerGame).gameState.numbers) }
+            (first.game as? CheckoutPracticeGame)?.let { assertEquals(it.targetFor(1), (second.game as CheckoutPracticeGame).targetFor(1)) }
+        }
+    }
+
+    @Test
+    fun everyKindIsInOneCategoryAndKillerNeedsTwoPlayers() {
+        assertEquals(GameKind.entries.toSet(), Category.entries.flatMap { it.kinds }.toSet())
+        assertEquals(2, GameKind.KILLER.minPlayers)
+        GameKind.entries.filter { it != GameKind.KILLER }.forEach { assertEquals(1, it.minPlayers) }
+        GameKind.entries.forEach { k -> GameSetup(kind = k).buildGame() }
+    }
+
+    @Test
     fun aGameIsPickedUpWhereItWasLeftByANewSession() {
         val memory = Memory()
         val first = GameSession().also { it.attach(memory); it.start(setup) }
@@ -49,7 +86,7 @@ class SavedGameTest {
 
         val second = GameSession().also { it.attach(memory) }
         assertTrue(second.isRunning)
-        assertEquals(setup, second.setup)
+        assertEquals(first.setup, second.setup)
         val a = first.game!!
         val b = second.game!!
         assertEquals(a.gameState, b.gameState)

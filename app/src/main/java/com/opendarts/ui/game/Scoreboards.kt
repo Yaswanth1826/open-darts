@@ -24,7 +24,14 @@ import com.opendarts.game.cricket.CRICKET_NUMBERS
 import com.opendarts.game.cricket.CricketGame
 import com.opendarts.game.cricket.CricketMode
 import com.opendarts.game.engine.DartGame
+import com.opendarts.game.party.BaseballGame
+import com.opendarts.game.party.HalveItGame
+import com.opendarts.game.party.KillerGame
+import com.opendarts.game.party.NumberRoundsGame
+import com.opendarts.game.party.ShanghaiGame
 import com.opendarts.game.practice.AroundTheClockGame
+import com.opendarts.game.practice.Bobs27Game
+import com.opendarts.game.practice.CheckoutPracticeGame
 import com.opendarts.game.practice.CLOCK_BULL_INDEX
 import com.opendarts.game.practice.CountUpGame
 import com.opendarts.game.practice.JdcChallengeGame
@@ -42,6 +49,11 @@ fun Scoreboard(game: DartGame<*>) {
         is AroundTheClockGame -> ClockBoard(game)
         is CountUpGame -> CountUpBoard(game)
         is JdcChallengeGame -> JdcBoard(game)
+        is Bobs27Game -> Bobs27Board(game)
+        is CheckoutPracticeGame -> CheckoutBoard(game)
+        is NumberRoundsGame -> NumberRoundsBoard(game)
+        is HalveItGame -> HalveItBoard(game)
+        is KillerGame -> KillerBoard(game)
     }
 }
 
@@ -188,6 +200,86 @@ private fun JdcBoard(game: JdcChallengeGame) {
     }
 }
 
+/** One card per player under a heading: name, a line of detail and a big value. */
+@Composable
+private fun ListBoard(game: DartGame<*>, heading: String, detail: (Int, Boolean) -> String, value: (Int) -> String, dimmed: (Int) -> Boolean = { false }) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(heading, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+        game.players.forEachIndexed { i, player ->
+            val active = i == game.currentPlayerIndex && !game.isFinished
+            PlayerCard(active) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(player.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        val line = detail(i, active)
+                        if (line.isNotEmpty()) Text(line, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    }
+                    Text(value(i), fontSize = 40.sp, fontWeight = FontWeight.Black,
+                        color = if (dimmed(i)) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Bobs27Board(game: Bobs27Game) {
+    val target = game.currentTarget
+    ListBoard(
+        game, if (target == null) "Game over" else "Round ${game.round.coerceAtMost(Bobs27Game.ROUNDS)} of ${Bobs27Game.ROUNDS} \u00B7 aim at D$target",
+        detail = { i, _ -> if (game.gameState.players[i].out) "Out" else "" },
+        value = { game.gameState.players[it].score.toString() },
+        dimmed = { game.gameState.players[it].out },
+    )
+}
+
+@Composable
+private fun CheckoutBoard(game: CheckoutPracticeGame) {
+    val left = game.remaining
+    ListBoard(
+        game, if (left == null) "Practice complete" else "Checkout ${game.round.coerceAtMost(game.config.attempts)} of ${game.config.attempts} \u00B7 $left to finish",
+        detail = { _, active ->
+            val route = if (active && left != null && !game.turnOver) Checkout.suggest(left, InOut.DOUBLE, game.dartsLeftInTurn.coerceAtLeast(1)) else null
+            if (route != null) "Finish: ${Checkout.format(route)}" else "Checkouts"
+        },
+        value = { game.gameState.checkouts[it].toString() },
+    )
+}
+
+@Composable
+private fun NumberRoundsBoard(game: NumberRoundsGame) {
+    val number = game.currentNumber
+    val unit = if (game is BaseballGame) "Inning" else "Round"
+    ListBoard(
+        game, if (number == null) "Game over" else "$unit ${game.round.coerceAtMost(game.rounds)} of ${game.rounds} \u00B7 aim at $number",
+        detail = { _, _ -> if (game is ShanghaiGame) "Single, double and treble in one visit wins" else "" },
+        value = { game.gameState.scores[it].toString() },
+    )
+}
+
+@Composable
+private fun HalveItBoard(game: HalveItGame) {
+    val target = game.currentTarget
+    ListBoard(
+        game, if (target == null) "Game over" else "Round ${game.round.coerceAtMost(HalveItGame.ROUNDS)} of ${HalveItGame.ROUNDS} \u00B7 aim at ${target.label}",
+        detail = { _, _ -> "" },
+        value = { game.gameState.scores[it].toString() },
+    )
+}
+
+private fun hearts(lives: Int) = "\u2665".repeat(lives)
+
+@Composable
+private fun KillerBoard(game: KillerGame) {
+    val s = game.gameState
+    ListBoard(
+        game, "Hit your own double to become a killer",
+        detail = { i, _ -> when { !s.alive(i) -> "Knocked out"; s.killers[i] -> "KILLER \u00B7 your number ${s.numbers[i]}"; else -> "Your number: ${s.numbers[i]} (hit D${s.numbers[i]})" } },
+        value = { if (s.alive(it)) hearts(s.lives[it]) else "\u2715" },
+        dimmed = { !s.alive(it) },
+    )
+}
+
 /** Big number and small caption per player, for the compact strip shown over the camera. */
 fun headline(game: DartGame<*>, index: Int): Pair<String, String> = when (game) {
     is X01Game -> {
@@ -206,5 +298,10 @@ fun headline(game: DartGame<*>, index: Int): Pair<String, String> = when (game) 
     }
     is CountUpGame -> game.gameState.scores[index].toString() to "points"
     is JdcChallengeGame -> game.gameState.players[index].total.toString() to "total"
+    is Bobs27Game -> game.gameState.players[index].score.toString() to (if (game.gameState.players[index].out) "out" else "D${game.currentTarget ?: "-"}")
+    is CheckoutPracticeGame -> game.gameState.checkouts[index].toString() to "checkouts"
+    is NumberRoundsGame -> game.gameState.scores[index].toString() to (if (game is BaseballGame) "runs" else "points")
+    is HalveItGame -> game.gameState.scores[index].toString() to "points"
+    is KillerGame -> game.gameState.let { s -> (if (s.alive(index)) hearts(s.lives[index]) else "\u2715") to (if (s.killers[index]) "killer" else "no. ${s.numbers[index]}") }
     else -> "" to ""
 }

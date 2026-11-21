@@ -17,6 +17,7 @@ import com.opendarts.game.model.DartHit
 import com.opendarts.geometry.Point
 import com.opendarts.vision.ml.RememberedDart
 import kotlin.math.hypot
+import kotlin.random.Random
 
 enum class CalloutKind { PLAIN, GOOD, BUST }
 
@@ -161,7 +162,8 @@ class GameSession : ViewModel() {
     }
 
     /** Starts a game; returns false (and raises [paywall]) when it needs the camera and the player may not use it. */
-    fun start(newSetup: GameSetup): Boolean {
+    fun start(requested: GameSetup): Boolean {
+        val newSetup = requested.copy(seed = Random.nextInt())
         if (newSetup.input == InputMode.CAMERA && !claimCamera(newGame = true)) return false
         cameraCounted = newSetup.input == InputMode.CAMERA
         setup = newSetup
@@ -217,7 +219,7 @@ class GameSession : ViewModel() {
         message = source + when (outcome) {
             Outcome.BUST -> "$thrower: ${hit.label} - BUST"
             Outcome.NOT_IN -> "$thrower: ${hit.label} - not in yet"
-            Outcome.LEG_WON -> "$thrower wins the leg!"
+            Outcome.LEG_WON -> if (setup.kind == GameKind.CHECKOUT_PRACTICE) "$thrower checked out!" else "$thrower wins the leg!"
             Outcome.SET_WON -> "$thrower wins the set!"
             Outcome.GAME_WON -> "$thrower wins!"
             Outcome.NO_SCORE -> "$thrower: ${hit.label}"

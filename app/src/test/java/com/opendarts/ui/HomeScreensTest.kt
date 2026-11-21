@@ -68,6 +68,23 @@ class HomeScreensTest {
     @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
     fun tourInPortrait() = tour("home-portrait")
 
+    @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
+    fun everyCategoryHasItsGames() {
+        rule.setContent { OpenDartsTheme { OpenDartsApp() } }
+        rule.waitForIdle()
+        rule.onNodeWithText("Party").performClick()
+        rule.waitForIdle()
+        shot("new-party")
+        rule.onNodeWithText("Killer").performClick()
+        rule.waitForIdle()
+        shot("new-killer")
+        rule.onNodeWithText("Practice").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Checkout practice").performClick()
+        rule.waitForIdle()
+        shot("new-checkout")
+    }
+
     @Test @Config(qualifiers = "w700dp-h360dp-land-xxhdpi")
     fun tourInLandscape() = tour("home-landscape")
 }

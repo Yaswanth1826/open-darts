@@ -148,7 +148,9 @@ fun GameScreen(session: GameSession, onExit: () -> Unit, onCalibrate: () -> Unit
                 onDismissRequest = { session.dismissedResult = true },
                 title = { Text(if (game.winners.orEmpty().size > 1) "Draw: $names" else "$names wins!") },
                 text = {
-                    if (game is X01Game) MatchStats(game.summaries()) else Text("Great game. Play again with the same players, or head back to the menu.")
+                    if (game is X01Game) MatchStats(game.summaries()) else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        game.players.forEachIndexed { i, p -> headline(game, i).let { (big, caption) -> Text("${p.name}: $big $caption".trim(), fontSize = 15.sp) } }
+                    }
                 },
                 confirmButton = { Button(onClick = { session.rematch() }) { Text("Rematch") } },
                 dismissButton = { Row { TextButton(onClick = { session.dismissedResult = true }) { Text("Review") }; TextButton(onClick = onExit) { Text("Menu") } } },

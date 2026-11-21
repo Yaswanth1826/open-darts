@@ -27,7 +27,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opendarts.game.engine.DartGame
+import com.opendarts.game.party.HalveItGame
+import com.opendarts.game.party.KillerGame
+import com.opendarts.game.party.NumberRoundsGame
+import com.opendarts.game.practice.Bobs27Game
+import com.opendarts.game.practice.CheckoutPracticeGame
+import com.opendarts.game.practice.JdcChallengeGame
 import com.opendarts.game.x01.Checkout
+import com.opendarts.game.x01.InOut
 import com.opendarts.game.x01.X01Game
 import com.opendarts.ui.common.DartIcon
 import com.opendarts.ui.common.avatarColour
@@ -50,8 +57,29 @@ fun standing(game: DartGame<*>, index: Int): Standing {
     return Standing(big, caption, null, null, if (active) game.turnHits.sumOf { it.points } else 0)
 }
 
-/** The shortest finish for the player on the throw, such as "T20 T20 D20", or null when there is none (or this is not X01). */
+/** What the next dart is aimed at in the games that set a target, such as "AIM D5" or "CHECK OUT 87"; null for the others. */
+fun aimHint(game: DartGame<*>): String? {
+    if (game.isFinished) return null
+    return when (game) {
+        is Bobs27Game -> game.currentTarget?.let { "AIM  D$it" }
+        is CheckoutPracticeGame -> game.remaining?.let { "CHECK OUT  $it" }
+        is NumberRoundsGame -> game.currentNumber?.let { "AIM  $it" }
+        is HalveItGame -> game.currentTarget?.let { "AIM  ${it.label.uppercase()}" }
+        is JdcChallengeGame -> game.currentTarget?.let { "AIM  ${it.label.uppercase()}" }
+        is KillerGame -> game.gameState.let { s ->
+            val me = game.currentPlayerIndex
+            if (s.killers[me]) "KILLER  \u00B7  HIT THEIR DOUBLES" else "HIT  D${s.numbers[me]}  TO BECOME A KILLER"
+        }
+        else -> null
+    }
+}
+
+/** The shortest finish for the player on the throw, such as "T20 T20 D20", or null when there is none (or there is no finish to show). */
 fun checkoutHint(game: DartGame<*>): String? {
+    if (game is CheckoutPracticeGame) {
+        if (game.isFinished || game.turnOver) return null
+        return game.remaining?.let { Checkout.suggest(it, InOut.DOUBLE, game.dartsLeftInTurn.coerceAtLeast(1)) }?.let(Checkout::format)
+    }
     if (game !is X01Game || game.isFinished || game.turnOver) return null
     val remaining = game.gameState.players[game.currentPlayerIndex].remaining
     return Checkout.suggest(remaining, game.config.outMode, game.dartsLeftInTurn.coerceAtLeast(1))?.let(Checkout::format)
@@ -105,6 +133,7 @@ fun CurrentCard(game: DartGame<*>, modifier: Modifier = Modifier, fill: Boolean 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(s.big, color = Pal.Lime, fontFamily = Display, fontSize = bigSize.sp, lineHeight = (bigSize * 1.05f).sp, maxLines = 1)
                     if (s.struck != null) Text("from ${s.struck}  \u00B7  visit ${s.turn}", color = Pal.Muted, fontFamily = Body, fontSize = 13.sp, maxLines = 1)
+                    aimHint(game)?.let { Text(it, color = Pal.Sky, fontFamily = Display, fontSize = 16.sp, maxLines = 1) }
                     checkoutHint(game)?.let { Text("FINISH  $it", color = Pal.Amber, fontFamily = Display, fontSize = 16.sp, maxLines = 1) }
                 }
             }

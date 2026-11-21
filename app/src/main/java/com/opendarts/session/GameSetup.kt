@@ -4,9 +4,17 @@ import com.opendarts.game.cricket.CricketConfig
 import com.opendarts.game.cricket.CricketGame
 import com.opendarts.game.cricket.CricketMode
 import com.opendarts.game.engine.DartGame
+import com.opendarts.game.party.BaseballGame
+import com.opendarts.game.party.HalveItGame
+import com.opendarts.game.party.KillerGame
+import com.opendarts.game.party.ShanghaiGame
 import com.opendarts.game.model.Player
 import com.opendarts.game.practice.AroundTheClockConfig
 import com.opendarts.game.practice.AroundTheClockGame
+import com.opendarts.game.practice.Bobs27Game
+import com.opendarts.game.practice.CheckoutLevel
+import com.opendarts.game.practice.CheckoutPracticeConfig
+import com.opendarts.game.practice.CheckoutPracticeGame
 import com.opendarts.game.practice.CountUpConfig
 import com.opendarts.game.practice.CountUpGame
 import com.opendarts.game.practice.JdcChallengeGame
@@ -19,7 +27,16 @@ enum class GameKind(val title: String, val blurb: String) {
     AROUND_THE_CLOCK("Around the Clock", "Hit 1 to 20, then the bull. First to finish wins."),
     COUNT_UP("Count Up", "Score as much as you can over a set number of rounds."),
     JDC_CHALLENGE("JDC Challenge", "Shanghai 10-15, every double and the bull, then Shanghai 15-20. Highest score wins."),
+    BOBS_27("Bob's 27", "Hit D1 to D20. Every hit adds, every miss costs. Don't drop below zero."),
+    CHECKOUT_PRACTICE("Checkout practice", "A random finish each round. Check it out in three darts."),
+    SHANGHAI("Shanghai", "One number per round. Single, double and treble of it in one visit wins on the spot."),
+    BASEBALL("Baseball", "Nine innings. Hit the inning's number: single 1 run, double 2, treble 3."),
+    HALVE_IT("Halve It", "Hit the target of every round or your score is cut in half."),
+    KILLER("Killer", "Hit your own double to become a killer, then take the others' lives. Needs 2+ players."),
 }
+
+/** How many players a game needs before it can start. */
+val GameKind.minPlayers: Int get() = if (this == GameKind.KILLER) 2 else 1
 
 enum class InputMode { MANUAL, CAMERA }
 
@@ -30,8 +47,11 @@ val GameKind.category: Category
     get() = when (this) {
         GameKind.X01 -> Category.X01
         GameKind.CRICKET -> Category.CRICKET
-        else -> Category.PRACTICE
+        GameKind.AROUND_THE_CLOCK, GameKind.COUNT_UP, GameKind.JDC_CHALLENGE, GameKind.BOBS_27, GameKind.CHECKOUT_PRACTICE -> Category.PRACTICE
+        GameKind.SHANGHAI, GameKind.BASEBALL, GameKind.HALVE_IT, GameKind.KILLER -> Category.PARTY
     }
+
+val Category.kinds: List<GameKind> get() = GameKind.entries.filter { it.category == this }
 
 data class GameSetup(
     val kind: GameKind = GameKind.X01,
@@ -40,6 +60,11 @@ data class GameSetup(
     val cricketMode: CricketMode = CricketMode.STANDARD,
     val clock: AroundTheClockConfig = AroundTheClockConfig(),
     val countUpRounds: Int = 8,
+    val checkoutLevel: CheckoutLevel = CheckoutLevel.MEDIUM,
+    val checkoutAttempts: Int = 10,
+    val shanghaiRounds: Int = 7,
+    /** Source of everything random in a game (checkout numbers, Killer numbers), kept so a saved game replays the same. */
+    val seed: Int = 0,
     val input: InputMode = InputMode.CAMERA,
 ) {
     val players: List<Player>
@@ -51,12 +76,19 @@ data class GameSetup(
         GameKind.AROUND_THE_CLOCK -> AroundTheClockGame(players, clock)
         GameKind.COUNT_UP -> CountUpGame(players, CountUpConfig(countUpRounds))
         GameKind.JDC_CHALLENGE -> JdcChallengeGame(players)
+        GameKind.BOBS_27 -> Bobs27Game(players)
+        GameKind.CHECKOUT_PRACTICE -> CheckoutPracticeGame(players, CheckoutPracticeConfig(checkoutLevel, checkoutAttempts, seed))
+        GameKind.SHANGHAI -> ShanghaiGame(players, shanghaiRounds)
+        GameKind.BASEBALL -> BaseballGame(players)
+        GameKind.HALVE_IT -> HalveItGame(players)
+        GameKind.KILLER -> KillerGame(players, seed)
     }
 
     /** Short heading shown on the setup and game screens. */
     val title: String
         get() = when (kind) {
             GameKind.X01 -> x01.startingScore.toString()
+            GameKind.CHECKOUT_PRACTICE -> "Checkout"
             else -> kind.title
         }
 
@@ -70,6 +102,12 @@ data class GameSetup(
                 GameKind.AROUND_THE_CLOCK -> if (clock.doublesOnly) "DOUBLES ONLY" else if (clock.skipOnMultiplier) "SKIP AHEAD" else "STANDARD"
                 GameKind.COUNT_UP -> "$countUpRounds ROUNDS"
                 GameKind.JDC_CHALLENGE -> "57 DARTS"
+                GameKind.BOBS_27 -> "D1 TO D20"
+                GameKind.CHECKOUT_PRACTICE -> "${checkoutLevel.label.uppercase()} · $checkoutAttempts TRIES"
+                GameKind.SHANGHAI -> "$shanghaiRounds ROUNDS"
+                GameKind.BASEBALL -> "9 INNINGS"
+                GameKind.HALVE_IT -> "9 ROUNDS"
+                GameKind.KILLER -> "3 LIVES"
             }
             return first to second
         }
@@ -90,6 +128,12 @@ data class GameSetup(
             GameKind.AROUND_THE_CLOCK -> if (clock.doublesOnly) "doubles only" else if (clock.skipOnMultiplier) "doubles & trebles skip" else "standard"
             GameKind.COUNT_UP -> "$countUpRounds rounds"
             GameKind.JDC_CHALLENGE -> "19 rounds · 57 darts"
+            GameKind.BOBS_27 -> "D1 to D20"
+            GameKind.CHECKOUT_PRACTICE -> "${checkoutLevel.label.lowercase()} · $checkoutAttempts checkouts"
+            GameKind.SHANGHAI -> "$shanghaiRounds rounds"
+            GameKind.BASEBALL -> "9 innings"
+            GameKind.HALVE_IT -> "9 rounds"
+            GameKind.KILLER -> "3 lives"
         }
 }
 

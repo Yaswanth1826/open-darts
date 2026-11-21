@@ -143,7 +143,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     }
 
     val landscape = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    val round = "${session.setup.title.uppercase()}  \u00B7  R${game.round}" + ((game as? X01Game)?.let { if (it.config.legsToWin > 1 || it.config.setsToWin > 1) " \u00B7 LEG ${it.gameState.legsPlayed + 1}" else "" }.orEmpty())
+    val round = "${session.setup.title.uppercase()}  \u00B7  R${game.round}" + ((game as? X01Game)?.let { if (it.config.legsToWin > 1 || it.config.setsToWin > 1) " \u00B7 LEG ${it.gameState.legsPlayed + 1}" else "" }.orEmpty()) + (aimHint(game)?.takeIf { it.length <= 16 }?.let { " \u00B7 " + it.replace("  ", " ") }.orEmpty())
     val cameraBox: @Composable (Modifier) -> Unit = { modifier ->
         CameraArea(
             camera, status, markers, aligning, guide, { guide = it }, showBoard, round, session.message, game.isFinished,
