@@ -36,6 +36,7 @@ import com.opendarts.game.practice.CLOCK_BULL_INDEX
 import com.opendarts.game.practice.CountUpGame
 import com.opendarts.game.practice.JdcChallengeGame
 import com.opendarts.game.practice.JdcPart
+import com.opendarts.game.practice.OneTwentyOneGame
 import com.opendarts.game.x01.Checkout
 import com.opendarts.game.x01.InOut
 import com.opendarts.game.x01.X01Game
@@ -51,6 +52,7 @@ fun Scoreboard(game: DartGame<*>) {
         is JdcChallengeGame -> JdcBoard(game)
         is Bobs27Game -> Bobs27Board(game)
         is CheckoutPracticeGame -> CheckoutBoard(game)
+        is OneTwentyOneGame -> OneTwentyOneBoard(game)
         is NumberRoundsGame -> NumberRoundsBoard(game)
         is HalveItGame -> HalveItBoard(game)
         is KillerGame -> KillerBoard(game)
@@ -247,6 +249,16 @@ private fun CheckoutBoard(game: CheckoutPracticeGame) {
 }
 
 @Composable
+private fun OneTwentyOneBoard(game: OneTwentyOneGame) {
+    val players = game.gameState.players
+    ListBoard(
+        game, "Attempt ${(players[game.currentPlayerIndex].attempt + 1).coerceAtMost(game.config.attempts)} of ${game.config.attempts} \u00B7 start ${game.config.start}",
+        detail = { i, _ -> if (players[i].attempt >= game.config.attempts) "Done" else "Target ${players[i].target} \u00B7 ${game.dartsLeft(i)} darts left" },
+        value = { if (players[it].best == 0) "\u2013" else players[it].best.toString() },
+    )
+}
+
+@Composable
 private fun NumberRoundsBoard(game: NumberRoundsGame) {
     val number = game.currentNumber
     val unit = if (game is BaseballGame) "Inning" else "Round"
@@ -280,6 +292,13 @@ private fun KillerBoard(game: KillerGame) {
     )
 }
 
+/** One line per player for the result dialog. */
+fun summaryLine(game: DartGame<*>, index: Int): String {
+    val name = game.players[index].name
+    if (game is OneTwentyOneGame) return "$name: " + game.gameState.players[index].best.let { if (it == 0) "no checkout" else "best $it" }
+    return headline(game, index).let { (big, caption) -> "$name: $big $caption".trim() }
+}
+
 /** Big number and small caption per player, for the compact strip shown over the camera. */
 fun headline(game: DartGame<*>, index: Int): Pair<String, String> = when (game) {
     is X01Game -> {
@@ -300,6 +319,7 @@ fun headline(game: DartGame<*>, index: Int): Pair<String, String> = when (game) 
     is JdcChallengeGame -> game.gameState.players[index].total.toString() to "total"
     is Bobs27Game -> game.gameState.players[index].score.toString() to (if (game.gameState.players[index].out) "out" else "D${game.currentTarget ?: "-"}")
     is CheckoutPracticeGame -> game.gameState.checkouts[index].toString() to "checkouts"
+    is OneTwentyOneGame -> game.gameState.players[index].let { p -> p.left.toString() to "target ${p.target} \u00B7 best ${if (p.best == 0) "-" else p.best.toString()}" }
     is NumberRoundsGame -> game.gameState.scores[index].toString() to (if (game is BaseballGame) "runs" else "points")
     is HalveItGame -> game.gameState.scores[index].toString() to "points"
     is KillerGame -> game.gameState.let { s -> (if (s.alive(index)) hearts(s.lives[index]) else "\u2715") to (if (s.killers[index]) "killer" else "no. ${s.numbers[index]}") }

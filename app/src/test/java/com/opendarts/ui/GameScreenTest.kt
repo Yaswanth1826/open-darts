@@ -65,6 +65,9 @@ class GameScreenTest {
     @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
     fun KILLER_screen() = play(GameKind.KILLER, "game-killer")
 
+    @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
+    fun ONE_TWENTY_ONE_screen() = play(GameKind.ONE_TWENTY_ONE, "game-121")
+
     @Test @Config(qualifiers = "w700dp-h360dp-land-xxhdpi")
     fun keypadScoreUpdatesInLandscape() = play(shotName = "manual-landscape")
 

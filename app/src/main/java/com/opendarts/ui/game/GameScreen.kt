@@ -149,7 +149,7 @@ fun GameScreen(session: GameSession, onExit: () -> Unit, onCalibrate: () -> Unit
                 title = { Text(if (game.winners.orEmpty().size > 1) "Draw: $names" else "$names wins!") },
                 text = {
                     if (game is X01Game) MatchStats(game.summaries()) else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        game.players.forEachIndexed { i, p -> headline(game, i).let { (big, caption) -> Text("${p.name}: $big $caption".trim(), fontSize = 15.sp) } }
+                        game.players.indices.forEach { i -> Text(summaryLine(game, i), fontSize = 15.sp) }
                     }
                 },
                 confirmButton = { Button(onClick = { session.rematch() }) { Text("Rematch") } },

@@ -13,6 +13,8 @@ import com.opendarts.game.practice.Bobs27Game
 import com.opendarts.game.practice.CheckoutLevel
 import com.opendarts.game.practice.CheckoutPracticeConfig
 import com.opendarts.game.practice.CheckoutPracticeGame
+import com.opendarts.game.practice.OneTwentyOneConfig
+import com.opendarts.game.practice.OneTwentyOneGame
 import com.opendarts.game.x01.Checkout
 import com.opendarts.game.x01.InOut
 import org.junit.Assert.assertEquals
@@ -334,5 +336,96 @@ class KillerTest {
             return g.gameState.lives
         }
         assertEquals(play(), play())
+    }
+}
+
+class OneTwentyOneTest {
+    private fun game(start: Int = 121, attempts: Int = 3, n: Int = 1) = OneTwentyOneGame(players(n), OneTwentyOneConfig(start, attempts))
+    private fun OneTwentyOneGame.checkOut(target: Int) = Checkout.suggest(target, InOut.DOUBLE, 3)!!.forEach { throwDart(it) }
+    private fun OneTwentyOneGame.missNineDarts() = repeat(3) { visit(MISS, MISS, MISS) }
+
+    @Test fun checkingOutMovesTheTargetUpAndStartsAFreshAttempt() {
+        val g = game()
+        assertEquals(9, g.dartsLeft(0))
+        g.checkOut(121)
+        val p = g.gameState.players[0]
+        assertEquals(Outcome.LEG_WON, g.lastOutcome)
+        assertEquals(122, p.target)
+        assertEquals(122, p.left)
+        assertEquals(121, p.best)
+        assertEquals(1, p.attempt)
+        assertEquals(9, g.dartsLeft(0))
+    }
+
+    @Test fun nineDartsWithoutAFinishSendYouBackToTheStart() {
+        val g = game()
+        g.checkOut(121)
+        g.endTurn()
+        g.missNineDarts()
+        val p = g.gameState.players[0]
+        assertEquals(121, p.target)
+        assertEquals(121, p.left)
+        assertEquals(2, p.attempt)
+        assertEquals(121, p.best)
+    }
+
+    @Test fun theRemainingScoreCarriesOverBetweenVisitsOfAnAttempt() {
+        val g = game()
+        g.visit(DartHit.treble(20), MISS, MISS)
+        assertEquals(61, g.gameState.players[0].left)
+        assertEquals(6, g.dartsLeft(0))
+        g.throwDart(DartHit.single(1))
+        assertEquals(5, g.dartsLeft(0))
+        assertEquals(60, g.gameState.players[0].left)
+    }
+
+    @Test fun aBustPutsTheVisitsDartsBack() {
+        val g = game()
+        g.visit(DartHit.single(20), MISS, MISS)
+        g.throwDart(DartHit.treble(20))
+        assertEquals(Outcome.BUST, g.throwDart(DartHit.treble(20)))
+        assertEquals(101, g.gameState.players[0].left)
+        assertEquals(2, g.gameState.players[0].visit)
+    }
+
+    @Test fun finishingOnASingleIsABust() {
+        val g = game(start = 40)
+        g.throwDart(DartHit.single(20))
+        assertEquals(Outcome.BUST, g.throwDart(DartHit.single(20)))
+        assertEquals(40, g.gameState.players[0].left)
+    }
+
+    @Test fun aBustOnTheLastVisitEndsTheAttempt() {
+        val g = game()
+        repeat(2) { g.visit(MISS, MISS, MISS) }
+        g.throwDart(DartHit.treble(20)); g.throwDart(DartHit.treble(20))
+        assertEquals(1, g.gameState.players[0].attempt)
+        assertEquals(121, g.gameState.players[0].target)
+    }
+
+    @Test fun theHighestNumberCheckedOutWinsAfterTheLastAttempt() {
+        val g = game(attempts = 1, n = 2)
+        g.checkOut(121)
+        g.endTurn()
+        assertEquals(1, g.currentPlayerIndex)
+        g.missNineDarts()
+        assertTrue(g.isFinished)
+        assertEquals(listOf(0), g.winners)
+    }
+
+    @Test fun nobodyCheckingOutIsADraw() {
+        val g = game(attempts = 1, n = 2)
+        repeat(3) { g.visit(MISS, MISS, MISS); g.visit(MISS, MISS, MISS) }
+        assertTrue(g.isFinished)
+        assertEquals(listOf(0, 1), g.winners)
+    }
+
+    @Test fun aPlayerWhoseAttemptsAreUpIsSkipped() {
+        val g = game(attempts = 1, n = 2)
+        g.checkOut(121)
+        g.endTurn()
+        g.visit(MISS, MISS, MISS)
+        assertEquals(1, g.currentPlayerIndex)
+        assertFalse(g.isFinished)
     }
 }

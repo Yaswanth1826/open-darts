@@ -18,6 +18,8 @@ import com.opendarts.game.practice.CheckoutPracticeGame
 import com.opendarts.game.practice.CountUpConfig
 import com.opendarts.game.practice.CountUpGame
 import com.opendarts.game.practice.JdcChallengeGame
+import com.opendarts.game.practice.OneTwentyOneConfig
+import com.opendarts.game.practice.OneTwentyOneGame
 import com.opendarts.game.x01.X01Config
 import com.opendarts.game.x01.X01Game
 
@@ -29,6 +31,7 @@ enum class GameKind(val title: String, val blurb: String) {
     JDC_CHALLENGE("JDC Challenge", "Shanghai 10-15, every double and the bull, then Shanghai 15-20. Highest score wins."),
     BOBS_27("Bob's 27", "Hit D1 to D20. Every hit adds, every miss costs. Don't drop below zero."),
     CHECKOUT_PRACTICE("Checkout practice", "A random finish each round. Check it out in three darts."),
+    ONE_TWENTY_ONE("121", "Check out 121 in nine darts. Success moves the target up one, failure sends you back."),
     SHANGHAI("Shanghai", "One number per round. Single, double and treble of it in one visit wins on the spot."),
     BASEBALL("Baseball", "Nine innings. Hit the inning's number: single 1 run, double 2, treble 3."),
     HALVE_IT("Halve It", "Hit the target of every round or your score is cut in half."),
@@ -47,7 +50,7 @@ val GameKind.category: Category
     get() = when (this) {
         GameKind.X01 -> Category.X01
         GameKind.CRICKET -> Category.CRICKET
-        GameKind.AROUND_THE_CLOCK, GameKind.COUNT_UP, GameKind.JDC_CHALLENGE, GameKind.BOBS_27, GameKind.CHECKOUT_PRACTICE -> Category.PRACTICE
+        GameKind.AROUND_THE_CLOCK, GameKind.COUNT_UP, GameKind.JDC_CHALLENGE, GameKind.BOBS_27, GameKind.CHECKOUT_PRACTICE, GameKind.ONE_TWENTY_ONE -> Category.PRACTICE
         GameKind.SHANGHAI, GameKind.BASEBALL, GameKind.HALVE_IT, GameKind.KILLER -> Category.PARTY
     }
 
@@ -62,6 +65,7 @@ data class GameSetup(
     val countUpRounds: Int = 8,
     val checkoutLevel: CheckoutLevel = CheckoutLevel.MEDIUM,
     val checkoutAttempts: Int = 10,
+    val oneTwentyOne: OneTwentyOneConfig = OneTwentyOneConfig(),
     val shanghaiRounds: Int = 7,
     /** Source of everything random in a game (checkout numbers, Killer numbers), kept so a saved game replays the same. */
     val seed: Int = 0,
@@ -78,6 +82,7 @@ data class GameSetup(
         GameKind.JDC_CHALLENGE -> JdcChallengeGame(players)
         GameKind.BOBS_27 -> Bobs27Game(players)
         GameKind.CHECKOUT_PRACTICE -> CheckoutPracticeGame(players, CheckoutPracticeConfig(checkoutLevel, checkoutAttempts, seed))
+        GameKind.ONE_TWENTY_ONE -> OneTwentyOneGame(players, oneTwentyOne)
         GameKind.SHANGHAI -> ShanghaiGame(players, shanghaiRounds)
         GameKind.BASEBALL -> BaseballGame(players)
         GameKind.HALVE_IT -> HalveItGame(players)
@@ -89,6 +94,7 @@ data class GameSetup(
         get() = when (kind) {
             GameKind.X01 -> x01.startingScore.toString()
             GameKind.CHECKOUT_PRACTICE -> "Checkout"
+            GameKind.ONE_TWENTY_ONE -> "121"
             else -> kind.title
         }
 
@@ -104,6 +110,7 @@ data class GameSetup(
                 GameKind.JDC_CHALLENGE -> "57 DARTS"
                 GameKind.BOBS_27 -> "D1 TO D20"
                 GameKind.CHECKOUT_PRACTICE -> "${checkoutLevel.label.uppercase()} · $checkoutAttempts TRIES"
+                GameKind.ONE_TWENTY_ONE -> "FROM ${oneTwentyOne.start} · ${oneTwentyOne.attempts} TRIES"
                 GameKind.SHANGHAI -> "$shanghaiRounds ROUNDS"
                 GameKind.BASEBALL -> "9 INNINGS"
                 GameKind.HALVE_IT -> "9 ROUNDS"
@@ -130,6 +137,7 @@ data class GameSetup(
             GameKind.JDC_CHALLENGE -> "19 rounds · 57 darts"
             GameKind.BOBS_27 -> "D1 to D20"
             GameKind.CHECKOUT_PRACTICE -> "${checkoutLevel.label.lowercase()} · $checkoutAttempts checkouts"
+            GameKind.ONE_TWENTY_ONE -> "from ${oneTwentyOne.start} · ${oneTwentyOne.attempts} attempts"
             GameKind.SHANGHAI -> "$shanghaiRounds rounds"
             GameKind.BASEBALL -> "9 innings"
             GameKind.HALVE_IT -> "9 rounds"

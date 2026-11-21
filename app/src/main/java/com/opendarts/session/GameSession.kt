@@ -219,7 +219,7 @@ class GameSession : ViewModel() {
         message = source + when (outcome) {
             Outcome.BUST -> "$thrower: ${hit.label} - BUST"
             Outcome.NOT_IN -> "$thrower: ${hit.label} - not in yet"
-            Outcome.LEG_WON -> if (setup.kind == GameKind.CHECKOUT_PRACTICE) "$thrower checked out!" else "$thrower wins the leg!"
+            Outcome.LEG_WON -> if (setup.kind == GameKind.CHECKOUT_PRACTICE || setup.kind == GameKind.ONE_TWENTY_ONE) "$thrower checked out!" else "$thrower wins the leg!"
             Outcome.SET_WON -> "$thrower wins the set!"
             Outcome.GAME_WON -> "$thrower wins!"
             Outcome.NO_SCORE -> "$thrower: ${hit.label}"

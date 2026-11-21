@@ -33,6 +33,7 @@ import com.opendarts.game.party.NumberRoundsGame
 import com.opendarts.game.practice.Bobs27Game
 import com.opendarts.game.practice.CheckoutPracticeGame
 import com.opendarts.game.practice.JdcChallengeGame
+import com.opendarts.game.practice.OneTwentyOneGame
 import com.opendarts.game.x01.Checkout
 import com.opendarts.game.x01.InOut
 import com.opendarts.game.x01.X01Game
@@ -63,6 +64,7 @@ fun aimHint(game: DartGame<*>): String? {
     return when (game) {
         is Bobs27Game -> game.currentTarget?.let { "AIM  D$it" }
         is CheckoutPracticeGame -> game.remaining?.let { "CHECK OUT  $it" }
+        is OneTwentyOneGame -> game.gameState.players[game.currentPlayerIndex].let { "TARGET  ${it.target}  \u00B7  ${game.dartsLeft(game.currentPlayerIndex)} DARTS" }
         is NumberRoundsGame -> game.currentNumber?.let { "AIM  $it" }
         is HalveItGame -> game.currentTarget?.let { "AIM  ${it.label.uppercase()}" }
         is JdcChallengeGame -> game.currentTarget?.let { "AIM  ${it.label.uppercase()}" }
@@ -79,6 +81,10 @@ fun checkoutHint(game: DartGame<*>): String? {
     if (game is CheckoutPracticeGame) {
         if (game.isFinished || game.turnOver) return null
         return game.remaining?.let { Checkout.suggest(it, InOut.DOUBLE, game.dartsLeftInTurn.coerceAtLeast(1)) }?.let(Checkout::format)
+    }
+    if (game is OneTwentyOneGame) {
+        if (game.isFinished || game.turnOver) return null
+        return Checkout.suggest(game.gameState.players[game.currentPlayerIndex].left, InOut.DOUBLE, game.dartsLeftInTurn.coerceAtLeast(1))?.let(Checkout::format)
     }
     if (game !is X01Game || game.isFinished || game.turnOver) return null
     val remaining = game.gameState.players[game.currentPlayerIndex].remaining

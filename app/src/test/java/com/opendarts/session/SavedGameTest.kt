@@ -39,13 +39,13 @@ class SavedGameTest {
 
     @Test
     fun theNewGamesSettingsAndSeedSurviveToo() {
-        val s = GameSetup(kind = GameKind.CHECKOUT_PRACTICE, checkoutLevel = CheckoutLevel.HARD, checkoutAttempts = 15, shanghaiRounds = 20, seed = -123456)
+        val s = GameSetup(kind = GameKind.CHECKOUT_PRACTICE, checkoutLevel = CheckoutLevel.HARD, checkoutAttempts = 15, oneTwentyOne = com.opendarts.game.practice.OneTwentyOneConfig(101, 15), shanghaiRounds = 20, seed = -123456)
         assertEquals(s, SetupCodec.decode(SetupCodec.encode(s)))
     }
 
     @Test
     fun aSaveFromBeforeTheNewGamesStillLoads() {
-        val old = SetupCodec.encode(setup).lines().filterNot { it.substringBefore('=') in setOf("checkout", "tries", "shanghai", "seed") }.joinToString("\n")
+        val old = SetupCodec.encode(setup).lines().filterNot { it.substringBefore('=') in setOf("checkout", "tries", "shanghai", "seed", "o21start", "o21tries") }.joinToString("\n")
         assertEquals(setup, SetupCodec.decode(old))
     }
 

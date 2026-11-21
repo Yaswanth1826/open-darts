@@ -5,6 +5,7 @@ import com.opendarts.game.cricket.CricketMode
 import com.opendarts.game.engine.GameLog
 import com.opendarts.game.practice.AroundTheClockConfig
 import com.opendarts.game.practice.CheckoutLevel
+import com.opendarts.game.practice.OneTwentyOneConfig
 import com.opendarts.game.x01.InOut
 import com.opendarts.game.x01.X01Config
 import java.net.URLDecoder
@@ -52,6 +53,8 @@ object SetupCodec {
         "rounds" to s.countUpRounds.toString(),
         "checkout" to s.checkoutLevel.name,
         "tries" to s.checkoutAttempts.toString(),
+        "o21start" to s.oneTwentyOne.start.toString(),
+        "o21tries" to s.oneTwentyOne.attempts.toString(),
         "shanghai" to s.shanghaiRounds.toString(),
         "seed" to s.seed.toString(),
         "input" to s.input.name,
@@ -72,6 +75,7 @@ object SetupCodec {
             countUpRounds = get("rounds").toInt(),
             checkoutLevel = map["checkout"]?.let(CheckoutLevel::valueOf) ?: fresh.checkoutLevel,
             checkoutAttempts = map["tries"]?.toInt() ?: fresh.checkoutAttempts,
+            oneTwentyOne = OneTwentyOneConfig(map["o21start"]?.toInt() ?: fresh.oneTwentyOne.start, map["o21tries"]?.toInt() ?: fresh.oneTwentyOne.attempts),
             shanghaiRounds = map["shanghai"]?.toInt() ?: fresh.shanghaiRounds,
             seed = map["seed"]?.toInt() ?: fresh.seed,
             input = InputMode.valueOf(get("input")),

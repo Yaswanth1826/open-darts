@@ -162,6 +162,15 @@ private fun RulesSection(setup: GameSetup, access: Access?, onChange: (GameSetup
                 }
                 Fixed("Easy 2-60, medium 61-110, hard 111-170. Each round everyone gets the same number, double out, three darts. Every checkout is a point.")
             }
+            GameKind.ONE_TWENTY_ONE -> {
+                Group("Start number") {
+                    Segmented(listOf(81, 101, 121), setup.oneTwentyOne.start, { it.toString() }, { onChange(setup.copy(oneTwentyOne = setup.oneTwentyOne.copy(start = it))) })
+                }
+                Group("Attempts") {
+                    Segmented(listOf(5, 10, 15, 20), setup.oneTwentyOne.attempts, { it.toString() }, { onChange(setup.copy(oneTwentyOne = setup.oneTwentyOne.copy(attempts = it))) })
+                }
+                Fixed("Check out the number (double out) with nine darts, three visits. A checkout moves the target up by one; running out of darts sends you back to the start. The highest number checked out wins.")
+            }
             GameKind.SHANGHAI -> {
                 Group("Rounds") { Segmented(listOf(7, 20), setup.shanghaiRounds, { if (it == 7) "7 (1 to 7)" else "20 (1 to 20)" }, { onChange(setup.copy(shanghaiRounds = it)) }) }
                 Fixed("Round n scores only hits on number n. A single, double and treble in one visit ends the game at once.")
