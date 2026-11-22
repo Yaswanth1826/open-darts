@@ -42,6 +42,15 @@ class CallerTest {
         assertEquals(listOf("60", "> Bo requires 141", "60", "> Ann requires 81"), said)
     }
 
+    @Test fun keyingTheNextScoreWithoutPressingNextStillCalls() {
+        val (s, said) = session(premium = true, full = true, start = 141)
+        visit(s)
+        s.throwDart(DartHit.single(20))
+        assertEquals(listOf("60", "> Bo requires 141"), said)
+        assertEquals("Bo", s.game!!.currentPlayer.name)
+        assertEquals(1, s.game!!.turnHits.size)
+    }
+
     @Test fun theSettingTurnsItOff() {
         val (s, said) = session(premium = true, full = false, start = 141)
         visit(s); s.nextPlayer()

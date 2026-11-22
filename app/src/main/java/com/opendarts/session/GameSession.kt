@@ -230,6 +230,9 @@ class GameSession : ViewModel() {
                 if (fromCamera) return
                 advance()
                 if (g.currentPlayer.isBot) return
+            } else if (g.turnOver && !fromCamera) {
+                // Keying the next score without pressing Next: hand over properly so the caller can speak for the new player.
+                advance()
             }
         }
         if (fromCamera && turnEndedEarly && g.turnOver) {
