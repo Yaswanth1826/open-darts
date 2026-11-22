@@ -25,9 +25,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opendarts.billing.FREE_CAMERA_GAMES
+import com.opendarts.billing.Plan
 import com.opendarts.billing.PlayBilling
 import com.opendarts.billing.RemoteEntitlements
 import com.opendarts.ui.common.OutlineButton
+import com.opendarts.ui.common.PlanButtons
 import com.opendarts.ui.common.PrimaryButton
 import com.opendarts.ui.common.findActivity
 import com.opendarts.ui.common.panel
@@ -45,7 +47,7 @@ data class AccountView(
     val testBuild: Boolean = false,
     val known: Boolean = true,
     val freeLeft: Int = FREE_CAMERA_GAMES,
-    val price: String? = null,
+    val plans: List<Plan> = emptyList(),
     val message: String? = null,
 )
 
@@ -56,13 +58,13 @@ fun AccountSection(account: RemoteEntitlements, billing: PlayBilling, onDelete: 
     val view = AccountView(
         available = account.available, signedIn = account.signedIn, email = account.email, busy = account.busy,
         premium = plan.premium, testBuild = plan.premium && account.isDebugBuild, known = plan.known, freeLeft = plan.freeLeft,
-        price = billing.price, message = account.message ?: billing.message,
+        plans = billing.plans, message = account.message ?: billing.message,
     )
     AccountCard(
         view,
         onSignIn = { context.findActivity()?.let(account::signIn) },
         onRetry = { account.refresh() },
-        onSubscribe = { context.findActivity()?.let(billing::purchase) },
+        onSubscribe = { plan -> context.findActivity()?.let { billing.purchase(it, plan) } },
         onRestore = { billing.restore(manual = true) },
         onManage = {
             val link = "https://play.google.com/store/account/subscriptions?sku=${PlayBilling.PRODUCT}&package=${context.packageName}"
@@ -75,7 +77,7 @@ fun AccountSection(account: RemoteEntitlements, billing: PlayBilling, onDelete: 
 
 @Composable
 fun AccountCard(
-    account: AccountView, onSignIn: () -> Unit, onRetry: () -> Unit, onSubscribe: () -> Unit,
+    account: AccountView, onSignIn: () -> Unit, onRetry: () -> Unit, onSubscribe: (Plan) -> Unit,
     onRestore: () -> Unit, onManage: () -> Unit, onSignOut: () -> Unit, onDelete: () -> Unit,
 ) {
     val plan = account
@@ -137,12 +139,9 @@ fun AccountCard(
             },
             color = Pal.Muted, fontFamily = Body, fontSize = 14.sp,
         )
-        val price = account.price
-        val subscribe = if (price != null) "Subscribe \u00B7 $price / month" else "Subscribe (not available yet)"
         when {
             !plan.known -> PrimaryButton("Try again", onClick = onRetry, modifier = Modifier.fillMaxWidth())
-            !plan.premium && plan.freeLeft == 0 -> PrimaryButton(subscribe, onClick = onSubscribe, enabled = price != null, modifier = Modifier.fillMaxWidth())
-            !plan.premium -> OutlineButton(subscribe, onSubscribe, Modifier.fillMaxWidth(), height = 48.dp)
+            !plan.premium -> PlanButtons(account.plans, emphasise = plan.freeLeft == 0, onChoose = onSubscribe)
         }
     }
     message?.let { Muted(it, Modifier.padding(start = 4.dp)) }

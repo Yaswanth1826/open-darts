@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.core.view.drawToBitmap
+import com.opendarts.billing.Plan
 import com.opendarts.ui.common.ScreenBox
 import com.opendarts.ui.home.AccountCard
 import com.opendarts.ui.home.AccountView
@@ -37,7 +38,7 @@ class AccountCardTest {
                     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         AccountCard(
                             view,
-                            onSignIn = { taps += "signIn" }, onRetry = { taps += "retry" }, onSubscribe = { taps += "subscribe" },
+                            onSignIn = { taps += "signIn" }, onRetry = { taps += "retry" }, onSubscribe = { taps += "subscribe ${it.basePlanId}" },
                             onRestore = { taps += "restore" }, onManage = { taps += "manage" }, onSignOut = { taps += "signOut" }, onDelete = { taps += "delete" },
                         )
                     }
@@ -50,21 +51,26 @@ class AccountCardTest {
     }
 
     private val me = "yaswanthnimmalagoud@gmail.com"
+    private val plans = listOf(
+        Plan("monthly", "m", "\u20AC3.99", 3_990_000, yearly = false),
+        Plan("yearly", "y", "\u20AC24.99", 24_990_000, yearly = true),
+    )
 
     @Test fun signedOut() = show("signed-out", AccountView(signedIn = false))
-    @Test fun trial() = show("trial", AccountView(email = me, freeLeft = 2, price = "\u20AC3.99"))
-    @Test fun trialUsed() = show("used", AccountView(email = me, freeLeft = 0, price = "\u20AC3.99"))
+    @Test fun trial() = show("trial", AccountView(email = me, freeLeft = 2, plans = plans))
+    @Test fun trialUsed() = show("used", AccountView(email = me, freeLeft = 0, plans = plans))
     @Test fun subscribed() = show("subscribed", AccountView(email = me, premium = true))
     @Test fun unknown() = show("unknown", AccountView(email = me, known = false))
 
     @Test fun theButtonsReportTheirTaps() {
         val taps = mutableListOf<String>()
-        show("taps", AccountView(email = me, freeLeft = 0, price = "\u20AC3.99"), taps)
-        rule.onNodeWithText("Subscribe \u00B7 \u20AC3.99 / month").performClick()
+        show("taps", AccountView(email = me, freeLeft = 0, plans = plans), taps)
+        rule.onNodeWithText("Monthly \u00B7 \u20AC3.99").performClick()
+        rule.onNodeWithText("Yearly \u00B7 \u20AC24.99 \u00B7 save 48%").performClick()
         rule.onNodeWithText("Restore purchases").performClick()
         rule.onNodeWithText("Sign out").performClick()
         rule.onNodeWithText("Delete my account").performClick()
-        assertEquals(listOf("subscribe", "restore", "signOut", "delete"), taps)
+        assertEquals(listOf("subscribe monthly", "subscribe yearly", "restore", "signOut", "delete"), taps)
         rule.onNodeWithText("Manage subscription").assertDoesNotExist()
     }
 

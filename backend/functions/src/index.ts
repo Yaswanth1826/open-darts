@@ -14,7 +14,7 @@ setGlobalOptions({ region: "europe-west1", maxInstances: 10 });
 const db = getFirestore();
 
 const packageName = defineString("PLAY_PACKAGE", { default: "com.opendarts" });
-const productId = defineString("PLAY_PRODUCT", { default: "camera_monthly" });
+const productId = defineString("PLAY_PRODUCT", { default: "camera_scoring" });
 // Turn on (APPCHECK_ENFORCE=true in functions/.env) once Play builds send App Check tokens; refuses calls from apps Google cannot vouch for.
 const enforceAppCheck = defineBoolean("APPCHECK_ENFORCE", { default: false });
 

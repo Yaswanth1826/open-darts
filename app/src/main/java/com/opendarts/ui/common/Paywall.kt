@@ -66,11 +66,7 @@ fun PaywallDialog(account: RemoteEntitlements, billing: PlayBilling, onKeypad: (
                             Row { Text("\u2022  $it", color = Pal.Text, fontFamily = Body, fontSize = 14.sp) }
                         }
                     }
-                    val price = billing.price
-                    PrimaryButton(
-                        if (price != null) "Subscribe \u00B7 $price / month" else "Subscribe (not available yet)",
-                        onClick = { context.findActivity()?.let(billing::purchase) }, enabled = price != null, modifier = Modifier.fillMaxWidth(),
-                    )
+                    PlanButtons(billing.plans, emphasise = true) { plan -> context.findActivity()?.let { billing.purchase(it, plan) } }
                     OutlineButton("Restore purchases", { billing.restore(manual = true) }, Modifier.fillMaxWidth())
                 }
             }
