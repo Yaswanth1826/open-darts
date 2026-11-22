@@ -15,6 +15,8 @@ android {
         versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
         versionName = (findProperty("versionName") as String?) ?: "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Real phones only; x86 images just add about 9 MB to the universal APK.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     // The upload key never lives in the repository: it comes from the environment (see .github/workflows/release-bundle.yml).
