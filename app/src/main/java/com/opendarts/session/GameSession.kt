@@ -121,6 +121,9 @@ class GameSession : ViewModel() {
     var onDart: ((DartHit) -> Unit)? = null
     var onVisit: ((String) -> Unit)? = null
 
+    /** Set by the screen from the settings: the caller adds what the player requires, for premium players. */
+    var fullCaller = false
+
     /** The latest visit call, for the screen to flash; the screen clears it once shown. */
     var callout by mutableStateOf<Callout?>(null)
         private set
@@ -130,7 +133,8 @@ class GameSession : ViewModel() {
 
     private fun visitEnded(g: DartGame<*>, call: String) {
         callout = Callout.of(g.currentPlayer.name, call, ++calloutId)
-        onVisit?.invoke(call)
+        val required = if (fullCaller && entitlements?.access()?.premium != false) VisitCall.requirement(g) else null
+        onVisit?.invoke(if (required == null) call else "$call. $required")
     }
 
     /** After a bust or a leg won with fewer than three darts, further darts do not count; the camera still sees them until the board is cleared. */

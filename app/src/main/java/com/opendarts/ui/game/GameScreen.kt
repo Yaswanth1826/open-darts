@@ -74,6 +74,7 @@ import com.opendarts.session.GameSession
 import com.opendarts.session.InputMode
 import com.opendarts.ui.common.Announcer
 import com.opendarts.ui.common.LocalAnnouncer
+import com.opendarts.ui.common.SoundSetting
 import com.opendarts.ui.common.RoundIconButton
 import com.opendarts.ui.theme.Body
 import com.opendarts.ui.theme.Display
@@ -132,6 +133,7 @@ fun GameScreen(session: GameSession, onExit: () -> Unit, onCalibrate: () -> Unit
     DisposableEffect(session, announcer) {
         session.onDart = { announcer.dart() }
         session.onVisit = announcer::say
+        session.fullCaller = SoundSetting.fullCaller(context)
         onDispose { session.onDart = null; session.onVisit = null; announcer.release() }
     }
     val game = session.game ?: return

@@ -1,4 +1,4 @@
-﻿package com.opendarts.game.engine
+package com.opendarts.game.engine
 
 import com.opendarts.game.practice.CountUpGame
 import com.opendarts.game.x01.X01Game
@@ -21,6 +21,13 @@ object VisitCall {
             is CountUpGame -> total(hits.sumOf { it.points })
             else -> null
         }
+    }
+
+    /** What the player who has just finished a visit needs to finish the leg, e.g. "Ann, you require 121"; null when the leg is won or the game has no score to count down. */
+    fun requirement(game: DartGame<*>): String? {
+        if (game !is X01Game) return null
+        val remaining = game.gameState.players[game.currentPlayerIndex].remaining
+        return if (remaining <= 0) null else "${game.currentPlayer.name}, you require $remaining"
     }
 
     private const val NO_SCORE = "No score"

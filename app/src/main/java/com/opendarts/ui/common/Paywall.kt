@@ -64,7 +64,7 @@ fun PaywallDialog(account: RemoteEntitlements, billing: PlayBilling, onKeypad: (
                         color = Pal.Muted, fontFamily = Body, fontSize = 15.sp,
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf("Darts scored by the camera, on your phone", "Play against the dart bot at six levels", "Advanced stats and practice drills").forEach {
+                        listOf("Darts scored by the camera, on your phone", "Play against the dart bot at six levels", "Advanced stats, weak-spot drills and a full caller voice").forEach {
                             Row { Text("\u2022  $it", color = Pal.Text, fontFamily = Body, fontSize = 14.sp) }
                         }
                     }

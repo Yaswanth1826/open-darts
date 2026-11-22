@@ -32,7 +32,9 @@ import com.opendarts.ui.camera.TrainingCollector
 import com.opendarts.ui.common.SectionLabel
 import com.opendarts.ui.common.findActivity
 import com.opendarts.ui.common.SetupTipsDialog
+import com.opendarts.ui.common.Segmented
 import com.opendarts.ui.common.SoundSetting
+import com.opendarts.ui.common.VoiceSpeed
 import com.opendarts.ui.common.TopBar
 import com.opendarts.ui.common.panel
 import com.opendarts.ui.theme.Body
@@ -43,6 +45,8 @@ import com.opendarts.ui.theme.Pal
 fun SettingsScreen(entitlements: RemoteEntitlements, billing: PlayBilling) {
     val context = LocalContext.current
     var sound by remember { mutableStateOf(SoundSetting.isOn(context)) }
+    var speed by remember { mutableStateOf(SoundSetting.speed(context)) }
+    var requirement by remember { mutableStateOf(SoundSetting.fullCaller(context)) }
     var simulate by remember { mutableStateOf(entitlements.simulateFreePlan) }
     var tips by remember { mutableStateOf(false) }
     var photos by remember { mutableStateOf(TrainingCollector.isOn(context)) }
@@ -78,6 +82,25 @@ fun SettingsScreen(entitlements: RemoteEntitlements, billing: PlayBilling) {
                 }
                 Switch(
                     checked = sound, onCheckedChange = { sound = it; SoundSetting.set(context, it) },
+                    colors = SwitchDefaults.colors(checkedTrackColor = Pal.Lime, checkedThumbColor = Pal.OnLime, uncheckedTrackColor = Pal.Raised, uncheckedThumbColor = Pal.Muted, uncheckedBorderColor = Pal.Line),
+                )
+            }
+            Column(Modifier.fillMaxWidth().panel(18.dp).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Caller voice speed", color = Pal.Text, fontFamily = Display, fontSize = 17.sp)
+                Segmented(VoiceSpeed.entries, speed, { it.label }, { speed = it; SoundSetting.setSpeed(context, it) })
+            }
+            val premium = entitlements.access().premium
+            Row(Modifier.fillMaxWidth().panel(18.dp).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Call what you require", color = if (premium) Pal.Text else Pal.Muted, fontFamily = Display, fontSize = 17.sp)
+                    Text(
+                        if (premium) "After each X01 visit the caller says how much the player needs to finish."
+                        else "Premium: after each X01 visit the caller says how much the player needs to finish.",
+                        color = Pal.Muted, fontFamily = Body, fontSize = 13.sp,
+                    )
+                }
+                Switch(
+                    checked = premium && requirement, onCheckedChange = { requirement = it; SoundSetting.setFullCaller(context, it) }, enabled = premium,
                     colors = SwitchDefaults.colors(checkedTrackColor = Pal.Lime, checkedThumbColor = Pal.OnLime, uncheckedTrackColor = Pal.Raised, uncheckedThumbColor = Pal.Muted, uncheckedBorderColor = Pal.Line),
                 )
             }

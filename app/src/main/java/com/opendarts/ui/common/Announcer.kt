@@ -1,4 +1,4 @@
-﻿package com.opendarts.ui.common
+package com.opendarts.ui.common
 
 import android.content.Context
 import android.media.AudioManager
@@ -10,8 +10,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import java.util.Locale
 
+/** How fast the caller talks. */
+enum class VoiceSpeed(val label: String, val rate: Float) { SLOW("Slow", 0.8f), NORMAL("Normal", 1.0f), FAST("Fast", 1.3f) }
+
 /** A short beep for every scored dart and a spoken call at the end of a visit. One switch (remembered) turns both off. */
 class Announcer(context: Context) {
+    private val appContext = context.applicationContext
     private val prefs = context.applicationContext.getSharedPreferences("opendarts_sound", Context.MODE_PRIVATE)
     private var ready = false
     private val speech: TextToSpeech? = runCatching {
@@ -37,7 +41,7 @@ class Announcer(context: Context) {
     }
 
     fun say(text: String) {
-        if (enabled && ready) runCatching { speech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "visit") }
+        if (enabled && ready) runCatching { speech?.setSpeechRate(SoundSetting.speed(appContext).rate); speech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "visit") }
     }
 
     fun release() {
@@ -53,4 +57,11 @@ object SoundSetting {
     private fun prefs(context: Context) = context.applicationContext.getSharedPreferences("opendarts_sound", Context.MODE_PRIVATE)
     fun isOn(context: Context): Boolean = prefs(context).getBoolean("on", true)
     fun set(context: Context, on: Boolean) = prefs(context).edit().putBoolean("on", on).apply()
+
+    fun speed(context: Context): VoiceSpeed = runCatching { VoiceSpeed.valueOf(prefs(context).getString("speed", null).orEmpty()) }.getOrDefault(VoiceSpeed.NORMAL)
+    fun setSpeed(context: Context, speed: VoiceSpeed) = prefs(context).edit().putString("speed", speed.name).apply()
+
+    /** Whether the caller also reads out what the player requires (a premium feature, the setting is ignored without it). */
+    fun fullCaller(context: Context): Boolean = prefs(context).getBoolean("full", true)
+    fun setFullCaller(context: Context, on: Boolean) = prefs(context).edit().putBoolean("full", on).apply()
 }
