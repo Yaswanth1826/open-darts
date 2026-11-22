@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import com.opendarts.billing.EntitlementProvider
+import com.opendarts.game.bot.DartBot
 import com.opendarts.game.engine.DartGame
 import com.opendarts.game.engine.DartTrace
 import com.opendarts.game.engine.GameAction
@@ -149,6 +150,9 @@ class GameSession : ViewModel() {
     /** Set when a camera request was refused, so the screen can offer the subscription. */
     var paywall by mutableStateOf(false)
 
+    /** What the paywall is about when it is not the camera, e.g. "the dart bot". */
+    var paywallFeature by mutableStateOf<String?>(null)
+
     /** The running game already took its free camera game (or the player is subscribed). */
     private var cameraCounted = false
 
@@ -164,6 +168,8 @@ class GameSession : ViewModel() {
     /** Starts a game; returns false (and raises [paywall]) when it needs the camera and the player may not use it. */
     fun start(requested: GameSetup): Boolean {
         val newSetup = requested.copy(seed = Random.nextInt())
+        if (newSetup.botLevel > 0 && entitlements?.access()?.premium == false) { paywallFeature = "the dart bot"; paywall = true; return false }
+        paywallFeature = null
         if (newSetup.input == InputMode.CAMERA && !claimCamera(newGame = true)) return false
         cameraCounted = newSetup.input == InputMode.CAMERA
         setup = newSetup
@@ -202,9 +208,18 @@ class GameSession : ViewModel() {
         revision++
     }
 
-    fun throwDart(hit: DartHit, fromCamera: Boolean = false, spot: Point? = null, behind: Int? = null) {
+    fun throwDart(hit: DartHit, fromCamera: Boolean = false, spot: Point? = null, behind: Int? = null, byBot: Boolean = false) {
         val g = game ?: return
         if (g.isFinished) return
+        if (!byBot) {
+            if (g.currentPlayer.isBot) return
+            // After a visit the next dart would hand over by itself; with a bot next in line it must not be thrown for it.
+            if (g.turnOver && g.players.any { it.isBot }) {
+                if (fromCamera) return
+                advance()
+                if (g.currentPlayer.isBot) return
+            }
+        }
         if (fromCamera && turnEndedEarly && g.turnOver) {
             message = "${g.currentPlayer.name}: dart seen after the visit ended is not counted"
             changed()
@@ -242,7 +257,20 @@ class GameSession : ViewModel() {
         changed()
     }
 
+    /** The player to throw has finished (or leaves): hands over to the next one. Not while a bot is throwing. */
     fun nextPlayer() {
+        if (game?.currentPlayer?.isBot == true) return
+        advance()
+    }
+
+    /** One step of the computer opponent: it throws its next dart, or hands over once its visit is over. */
+    fun botStep() {
+        val g = game ?: return
+        if (g.isFinished || !g.currentPlayer.isBot) return
+        if (g.turnOver) advance() else throwDart(DartBot.throwDart(g, g.currentPlayer.bot), byBot = true)
+    }
+
+    private fun advance() {
         val g = game ?: return
         if (g.isFinished) return
         if (!g.turnOver) {
@@ -281,6 +309,7 @@ class GameSession : ViewModel() {
      */
     fun editDart(index: Int, hit: DartHit?) {
         val g = game ?: return
+        if (g.currentPlayer.isBot) return
         val spot = trace.spotOf(index)
         var added: Outcome? = null
         val done = when {
@@ -330,6 +359,7 @@ class GameSession : ViewModel() {
     /** The next empty slot [slot] holds a dart that landed behind dart [front]: it scores the same, and the pair is remembered. */
     fun dartBehind(slot: Int, front: Int) {
         val g = game ?: return
+        if (g.currentPlayer.isBot) return
         val hit = g.turnHits.getOrNull(front) ?: return
         if (slot != g.turnHits.size || g.isFinished) return
         val outcome = g.throwDart(hit)

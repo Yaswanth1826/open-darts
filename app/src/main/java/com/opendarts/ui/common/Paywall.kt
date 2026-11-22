@@ -27,25 +27,26 @@ import com.opendarts.ui.theme.Pal
  * or the free games are used up (subscribe). It closes itself once the camera is allowed.
  */
 @Composable
-fun PaywallDialog(account: RemoteEntitlements, billing: PlayBilling, onKeypad: () -> Unit, onDismiss: () -> Unit) {
+fun PaywallDialog(account: RemoteEntitlements, billing: PlayBilling, onKeypad: () -> Unit, onDismiss: () -> Unit, feature: String? = null) {
     val context = LocalContext.current
     val access = account.access()
-    LaunchedEffect(access.canUseCamera) { if (access.canUseCamera) onDismiss() }
+    LaunchedEffect(access.canUseCamera, access.premium) { if (if (feature == null) access.canUseCamera else access.premium) onDismiss() }
+    val subject = feature ?: "camera scoring"
     Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier.fillMaxWidth().panel(26.dp, colour = Pal.Raised).verticalScroll(rememberScrollState()).padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("CAMERA SCORING", color = Pal.Lime, fontFamily = Display, fontSize = 13.sp, letterSpacing = 2.sp)
+            Text(subject.uppercase(), color = Pal.Lime, fontFamily = Display, fontSize = 13.sp, letterSpacing = 2.sp)
             when {
                 !account.available -> {
                     Text("Not available in this build", color = Pal.Text, fontFamily = Display, fontSize = 22.sp)
-                    Text("Camera scoring needs an account, and this build has none set up. The keypad works as always.", color = Pal.Muted, fontFamily = Body, fontSize = 15.sp)
+                    Text("Using $subject needs an account, and this build has none set up. The keypad works as always.", color = Pal.Muted, fontFamily = Body, fontSize = 15.sp)
                 }
                 !access.signedIn -> {
-                    Text("Sign in to use the camera", color = Pal.Text, fontFamily = Display, fontSize = 22.sp)
+                    Text(if (feature == null) "Sign in to use the camera" else "Sign in to use $feature", color = Pal.Text, fontFamily = Display, fontSize = 22.sp)
                     Text(
-                        "Camera scoring needs a free Google account, so your $FREE_CAMERA_GAMES free games and any subscription stay with you. The keypad needs no account.",
+                        "Using $subject needs a free Google account, so your $FREE_CAMERA_GAMES free camera games and any subscription stay with you. The keypad needs no account.",
                         color = Pal.Muted, fontFamily = Body, fontSize = 15.sp,
                     )
                     PrimaryButton(if (account.busy) "Signing in\u2026" else "Continue with Google", onClick = { context.findActivity()?.let(account::signIn) }, enabled = !account.busy, modifier = Modifier.fillMaxWidth())
@@ -56,13 +57,14 @@ fun PaywallDialog(account: RemoteEntitlements, billing: PlayBilling, onKeypad: (
                     PrimaryButton("Try again", onClick = { account.refresh() }, modifier = Modifier.fillMaxWidth())
                 }
                 else -> {
-                    Text("Your $FREE_CAMERA_GAMES free camera games are used", color = Pal.Text, fontFamily = Display, fontSize = 22.sp)
+                    Text(if (feature == null) "Your $FREE_CAMERA_GAMES free camera games are used" else "Premium feature", color = Pal.Text, fontFamily = Display, fontSize = 22.sp)
                     Text(
-                        "Subscribe to keep scoring every dart automatically. The keypad stays free, with every game mode and unlimited matches.",
+                        if (feature == null) "Subscribe to keep scoring every dart automatically. The keypad stays free, with every game mode and unlimited matches."
+                        else "Playing against $feature is part of Premium. Every game on the keypad against people stays free.",
                         color = Pal.Muted, fontFamily = Body, fontSize = 15.sp,
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf("Darts scored by the camera, on your phone", "Corrections and undo on every dart", "Works with any board and room").forEach {
+                        listOf("Darts scored by the camera, on your phone", "Play against the dart bot at six levels", "Advanced stats and practice drills").forEach {
                             Row { Text("\u2022  $it", color = Pal.Text, fontFamily = Body, fontSize = 14.sp) }
                         }
                     }
@@ -71,7 +73,7 @@ fun PaywallDialog(account: RemoteEntitlements, billing: PlayBilling, onKeypad: (
                 }
             }
             (account.message ?: billing.message)?.let { Text(it, color = Pal.Muted, fontFamily = Body, fontSize = 13.sp) }
-            OutlineButton("Play with the keypad", onKeypad, Modifier.fillMaxWidth())
+            OutlineButton(if (feature == null) "Play with the keypad" else "Play without it", onKeypad, Modifier.fillMaxWidth())
         }
     }
 }

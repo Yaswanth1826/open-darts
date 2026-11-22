@@ -4,6 +4,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.core.view.drawToBitmap
 import androidx.test.core.app.ApplicationProvider
 import com.opendarts.session.GameKind
@@ -83,6 +84,17 @@ class HomeScreensTest {
         rule.onNodeWithText("Checkout practice").performClick()
         rule.waitForIdle()
         shot("new-checkout")
+    }
+
+    @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
+    fun theBotCanBePickedInTheSetup() {
+        rule.setContent { OpenDartsTheme { OpenDartsApp() } }
+        rule.waitForIdle()
+        rule.onNodeWithText("X01").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Club \u00B7 60").performScrollTo().performClick()
+        rule.waitForIdle()
+        shot("new-bot")
     }
 
     @Test @Config(qualifiers = "w700dp-h360dp-land-xxhdpi")

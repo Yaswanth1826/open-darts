@@ -82,9 +82,9 @@ fun OpenDartsApp() {
         }
         if (session.paywall) {
             PaywallDialog(
-                entitlements, billing,
-                onKeypad = { session.draft = session.draft.copy(input = InputMode.MANUAL); session.paywall = false },
-                onDismiss = { session.paywall = false },
+                entitlements, billing, feature = session.paywallFeature,
+                onKeypad = { if (session.paywallFeature == null) session.draft = session.draft.copy(input = InputMode.MANUAL) else session.draft = session.draft.copy(botLevel = 0); session.paywall = false; session.paywallFeature = null },
+                onDismiss = { session.paywall = false; session.paywallFeature = null },
             )
         }
     }

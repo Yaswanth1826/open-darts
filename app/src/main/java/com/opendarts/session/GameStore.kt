@@ -58,6 +58,7 @@ object SetupCodec {
         "shanghai" to s.shanghaiRounds.toString(),
         "seed" to s.seed.toString(),
         "input" to s.input.name,
+        "bot" to s.botLevel.toString(),
     ).joinToString("\n") { (k, v) -> k + "=" + URLEncoder.encode(v, "UTF-8") }
 
     fun decode(text: String): GameSetup? = runCatching {
@@ -79,6 +80,7 @@ object SetupCodec {
             shanghaiRounds = map["shanghai"]?.toInt() ?: fresh.shanghaiRounds,
             seed = map["seed"]?.toInt() ?: fresh.seed,
             input = InputMode.valueOf(get("input")),
+            botLevel = map["bot"]?.toInt() ?: 0,
         )
     }.getOrNull()
 }

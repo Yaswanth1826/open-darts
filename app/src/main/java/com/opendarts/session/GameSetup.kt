@@ -38,6 +38,9 @@ enum class GameKind(val title: String, val blurb: String) {
     KILLER("Killer", "Hit your own double to become a killer, then take the others' lives. Needs 2+ players."),
 }
 
+/** Games the computer opponent knows how to play. */
+val GameKind.canHaveBot: Boolean get() = this == GameKind.X01 || this == GameKind.CRICKET || this == GameKind.AROUND_THE_CLOCK || this == GameKind.COUNT_UP
+
 /** How many players a game needs before it can start. */
 val GameKind.minPlayers: Int get() = if (this == GameKind.KILLER) 2 else 1
 
@@ -70,9 +73,11 @@ data class GameSetup(
     /** Source of everything random in a game (checkout numbers, Killer numbers), kept so a saved game replays the same. */
     val seed: Int = 0,
     val input: InputMode = InputMode.CAMERA,
+    /** 0 for no computer opponent; otherwise its X01 average. The bot is always the last player. */
+    val botLevel: Int = 0,
 ) {
     val players: List<Player>
-        get() = playerNames.mapIndexed { i, name -> Player(i, name.trim().ifBlank { "Player ${i + 1}" }) }
+        get() = playerNames.mapIndexed { i, name -> Player(i, name.trim().ifBlank { "Player ${i + 1}" }, if (i == playerNames.lastIndex) botLevel else 0) }
 
     fun buildGame(): DartGame<*> = when (kind) {
         GameKind.X01 -> X01Game(players, x01)

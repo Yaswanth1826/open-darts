@@ -135,6 +135,7 @@ fun GameScreen(session: GameSession, onExit: () -> Unit, onCalibrate: () -> Unit
         onDispose { session.onDart = null; session.onVisit = null; announcer.release() }
     }
     val game = session.game ?: return
+    BotDriver(session)
     GameWindow()
     CompositionLocalProvider(LocalGameRevision provides session.revision, LocalAnnouncer provides announcer) {
         Box(Modifier.fillMaxSize()) {
@@ -156,6 +157,18 @@ fun GameScreen(session: GameSession, onExit: () -> Unit, onCalibrate: () -> Unit
                 dismissButton = { Row { TextButton(onClick = { session.dismissedResult = true }) { Text("Review") }; TextButton(onClick = onExit) { Text("Menu") } } },
             )
         }
+    }
+}
+
+/** Plays the computer opponent's turn, one dart at a time with a pause so the game can be followed. */
+@Composable
+private fun BotDriver(session: GameSession) {
+    val game = session.game
+    val botTurn = game != null && !game.isFinished && game.currentPlayer.isBot
+    LaunchedEffect(session.revision, botTurn) {
+        if (!botTurn) return@LaunchedEffect
+        kotlinx.coroutines.delay(if (session.game?.turnOver == true) 1800L else 1000L)
+        session.botStep()
     }
 }
 
@@ -211,7 +224,7 @@ private fun ManualGame(session: GameSession, game: DartGame<*>, onExit: () -> Un
     val landscape = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val keypad: @Composable (Modifier) -> Unit = { modifier ->
         Keypad(
-            canUndo = game.canUndo, enabled = !game.isFinished,
+            canUndo = game.canUndo, enabled = !game.isFinished && !game.currentPlayer.isBot,
             onHit = { session.throwDart(it) }, onUndo = { session.undo() }, onPrevious = { session.previousPlayer() }, onNext = { session.nextPlayer() },
             modifier = modifier,
         )

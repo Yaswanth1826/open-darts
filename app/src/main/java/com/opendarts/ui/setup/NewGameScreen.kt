@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.opendarts.game.bot.DartBot
 import com.opendarts.game.cricket.CricketMode
 import com.opendarts.game.practice.CheckoutLevel
 import com.opendarts.game.x01.InOut
@@ -50,7 +51,10 @@ import com.opendarts.session.GameSession
 import com.opendarts.session.GameSetup
 import com.opendarts.billing.Access
 import com.opendarts.billing.FREE_CAMERA_GAMES
+import com.opendarts.session.HistoryStore
 import com.opendarts.session.InputMode
+import com.opendarts.session.canHaveBot
+import com.opendarts.session.x01Average
 import com.opendarts.session.PlayerStore
 import com.opendarts.session.category
 import com.opendarts.session.kinds
@@ -80,13 +84,20 @@ fun NewGameScreen(session: GameSession, onStart: () -> Unit, onBack: () -> Unit)
     var roster by remember { mutableStateOf(store.load()) }
     var editing by remember { mutableStateOf<Int?>(null) }
     val setup = session.draft
-    val ready = roster.selected.size >= setup.kind.minPlayers
+    val botLevel = if (setup.kind.canHaveBot) setup.botLevel else 0
+    val ready = roster.selected.size + (if (botLevel > 0) 1 else 0) >= setup.kind.minPlayers
+    val firstPlayer = roster.chosenNames.firstOrNull()
+    val ownLevel = remember(firstPlayer) { firstPlayer?.let { HistoryStore(context.applicationContext).all().x01Average(it) }?.coerceIn(20, 105) }
     val landscape = LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
 
     fun update(new: Roster) { roster = new; store.save(new) }
     fun toggle(i: Int) = update(roster.copy(selected = if (i in roster.selected) roster.selected - i else roster.selected + i))
-    val start = { if (session.start(setup.copy(playerNames = roster.chosenNames))) onStart() }
-    val summary = "${setup.kind.title}${if (setup.kind == GameKind.X01) " ${setup.x01.startingScore}" else ""} \u00B7 ${roster.selected.size} ${if (roster.selected.size == 1) "player" else "players"}"
+    val start = {
+        val names = roster.chosenNames + if (botLevel > 0) listOf("Bot " + DartBot.levelName(botLevel)) else emptyList()
+        if (session.start(setup.copy(playerNames = names, botLevel = botLevel))) onStart()
+    }
+    val count = roster.selected.size + if (botLevel > 0) 1 else 0
+    val summary = "${setup.kind.title}${if (setup.kind == GameKind.X01) " ${setup.x01.startingScore}" else ""} \u00B7 $count ${if (count == 1) "player" else "players"}"
 
     ScreenBox {
         Column(Modifier.fillMaxSize()) {
@@ -95,7 +106,10 @@ fun NewGameScreen(session: GameSession, onStart: () -> Unit, onBack: () -> Unit)
             }
             val access = session.entitlements?.access()
             val rules: @Composable () -> Unit = { RulesSection(setup, access) { session.draft = it } }
-            val players: @Composable () -> Unit = { PlayersSection(roster, setup.kind.minPlayers, onToggle = ::toggle, onEdit = { editing = it }) }
+            val players: @Composable () -> Unit = {
+                PlayersSection(roster, if (botLevel > 0) 0 else setup.kind.minPlayers, onToggle = ::toggle, onEdit = { editing = it })
+                if (setup.kind.canHaveBot) BotSection(botLevel, ownLevel, premium = access?.premium != false) { session.draft = setup.copy(botLevel = it) }
+            }
             if (landscape) {
                 Row(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     Column(Modifier.weight(1.2f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) { rules() }
@@ -263,6 +277,23 @@ private fun PlayersSection(roster: Roster, minPlayers: Int, onToggle: (Int) -> U
                 }
             }
         }
+    }
+}
+
+/** Picks a computer opponent: none, one of the levels, or one that plays like the first player has been playing. */
+@Composable
+private fun BotSection(level: Int, ownLevel: Int?, premium: Boolean, onPick: (Int) -> Unit) {
+    Group("Computer opponent") {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OptionChip("None", level == 0, { onPick(0) })
+            DartBot.LEVELS.forEach { OptionChip("${it.label} \u00B7 ${it.average}", level == it.average, { onPick(it.average) }) }
+            if (ownLevel != null && DartBot.LEVELS.none { it.average == ownLevel }) OptionChip("Like you \u00B7 $ownLevel", level == ownLevel, { onPick(ownLevel) })
+        }
+        Text(
+            if (premium) "The number is its three-dart average. It throws after you, and you can play on the camera or the keypad."
+            else "Premium: play against the bot at six levels. The number is its three-dart average.",
+            color = Pal.Muted, fontFamily = Body, fontSize = 14.sp,
+        )
     }
 }
 

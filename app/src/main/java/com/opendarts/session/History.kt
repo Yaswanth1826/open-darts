@@ -20,6 +20,8 @@ data class MatchPlayer(
     val checkoutHits: Int = 0,
     val legs: Int = 0,
     val sets: Int = 0,
+    /** A computer opponent: it is listed in the game but has no figures of its own. */
+    val bot: Boolean = false,
 ) {
     /** Three-dart average. */
     val average: Double get() = if (darts == 0) 0.0 else points * 3.0 / darts
@@ -47,7 +49,7 @@ data class MatchRecord(
                     name = player.name, won = i in won,
                     darts = s?.totalDarts ?: 0, points = s?.totalPoints ?: 0, bestVisit = s?.highestVisit ?: 0,
                     hundredPlus = s?.hundredPlus ?: 0, oneFortyPlus = s?.oneFortyPlus ?: 0, oneEighties = s?.oneEighties ?: 0,
-                    finishingDarts = s?.finishingDarts ?: 0, checkoutHits = s?.checkoutHits ?: 0, legs = s?.legs ?: 0, sets = s?.sets ?: 0,
+                    finishingDarts = s?.finishingDarts ?: 0, checkoutHits = s?.checkoutHits ?: 0, legs = s?.legs ?: 0, sets = s?.sets ?: 0, bot = player.isBot,
                 )
             }
             return MatchRecord(id, setup.kind, setup.title, setup.input, game.round, players)
@@ -78,7 +80,7 @@ data class PlayerStats(
 /** One entry per player name, the one with most games first. */
 fun List<MatchRecord>.playerStats(): List<PlayerStats> {
     val byName = LinkedHashMap<String, MutableList<Pair<MatchRecord, MatchPlayer>>>()
-    for (record in this) for (p in record.players) byName.getOrPut(p.name.trim()) { ArrayList() } += record to p
+    for (record in this) for (p in record.players.filter { !it.bot }) byName.getOrPut(p.name.trim()) { ArrayList() } += record to p
     return byName.map { (name, games) ->
         val x01 = games.filter { it.first.kind == GameKind.X01 }.map { it.second }
         PlayerStats(
@@ -88,6 +90,12 @@ fun List<MatchRecord>.playerStats(): List<PlayerStats> {
             finishingDarts = x01.sumOf { it.finishingDarts }, checkoutHits = x01.sumOf { it.checkoutHits },
         )
     }.sortedByDescending { it.games }
+}
+
+/** A player's X01 three-dart average over the games in this list, rounded, or null when they have played too little for it to mean anything. */
+fun List<MatchRecord>.x01Average(name: String): Int? {
+    val stats = playerStats().firstOrNull { it.name == name.trim() } ?: return null
+    return if (stats.darts >= 30) Math.round(stats.average).toInt() else null
 }
 
 /** Where finished games are kept. */
@@ -106,7 +114,7 @@ object HistoryCodec {
 
     fun encode(r: MatchRecord): String {
         val players = r.players.joinToString(";") { p ->
-            listOf(enc(p.name), p.won, p.darts, p.points, p.bestVisit, p.hundredPlus, p.oneFortyPlus, p.oneEighties, p.finishingDarts, p.checkoutHits, p.legs, p.sets).joinToString(",")
+            listOf(enc(p.name), p.won, p.darts, p.points, p.bestVisit, p.hundredPlus, p.oneFortyPlus, p.oneEighties, p.finishingDarts, p.checkoutHits, p.legs, p.sets, p.bot).joinToString(",")
         }
         return listOf(r.id.toString(), r.kind.name, enc(r.title), r.input.name, r.rounds.toString(), players).joinToString("|")
     }
@@ -115,7 +123,7 @@ object HistoryCodec {
         val f = line.split('|')
         val players = f[5].split(';').filter { it.isNotEmpty() }.map { text ->
             val p = text.split(',')
-            MatchPlayer(dec(p[0]), p[1].toBoolean(), p[2].toInt(), p[3].toInt(), p[4].toInt(), p[5].toInt(), p[6].toInt(), p[7].toInt(), p[8].toInt(), p[9].toInt(), p[10].toInt(), p[11].toInt())
+            MatchPlayer(dec(p[0]), p[1].toBoolean(), p[2].toInt(), p[3].toInt(), p[4].toInt(), p[5].toInt(), p[6].toInt(), p[7].toInt(), p[8].toInt(), p[9].toInt(), p[10].toInt(), p[11].toInt(), p.getOrNull(12).toBoolean())
         }
         MatchRecord(f[0].toLong(), GameKind.valueOf(f[1]), dec(f[2]), InputMode.valueOf(f[3]), f[4].toInt(), players)
     }.getOrNull()

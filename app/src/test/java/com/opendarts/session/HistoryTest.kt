@@ -99,4 +99,31 @@ class HistoryTest {
         assertEquals(listOf("Ann", "Bo"), stats.map { it.name })
         assertNull(stats.first { it.name == "Bo" }.checkoutPercent)
     }
+
+    @Test
+    fun aBotIsListedInTheGameButHasNoFiguresOfItsOwn() {
+        val book = Memory()
+        val s = GameSession().also { it.history = book; it.start(setup.copy(playerNames = listOf("Ann", "Bot Club"), botLevel = 60)) }
+        s.throwDart(DartHit.double(20)); s.throwDart(DartHit.single(20))
+        val record = MatchRecord(1, GameKind.X01, "40", InputMode.MANUAL, 2, listOf(MatchPlayer("Ann", true, darts = 33, points = 400), MatchPlayer("Bot Club", false, darts = 33, points = 300, bot = true)))
+        assertEquals(listOf("Ann"), listOf(record).playerStats().map { it.name })
+        assertEquals(record, HistoryCodec.decode(HistoryCodec.encode(record)))
+        assertTrue(HistoryCodec.decode(HistoryCodec.encode(record))!!.players[1].bot)
+    }
+
+    @Test
+    fun aRecordSavedBeforeBotsExistedStillLoads() {
+        val record = MatchRecord(1, GameKind.X01, "501", InputMode.MANUAL, 2, listOf(MatchPlayer("Ann", true, darts = 33, points = 400)))
+        val old = HistoryCodec.encode(record).replace(",false;", ";").removeSuffix(",false")
+        assertEquals(record, HistoryCodec.decode(old))
+    }
+
+    @Test
+    fun theAverageNeedsEnoughDartsToMeanAnything() {
+        val few = listOf(MatchRecord(1, GameKind.X01, "501", InputMode.MANUAL, 2, listOf(MatchPlayer("Ann", true, darts = 12, points = 400))))
+        assertNull(few.x01Average("Ann"))
+        val many = listOf(MatchRecord(1, GameKind.X01, "501", InputMode.MANUAL, 2, listOf(MatchPlayer("Ann", true, darts = 30, points = 520))))
+        assertEquals(52, many.x01Average("Ann"))
+        assertNull(many.x01Average("Bo"))
+    }
 }
