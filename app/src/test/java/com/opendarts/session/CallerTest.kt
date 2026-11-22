@@ -37,9 +37,9 @@ class CallerTest {
         visit(s)
         assertEquals(listOf("60"), said)
         s.nextPlayer()
-        assertEquals(listOf("60", "> Bo, you require 141"), said)
+        assertEquals(listOf("60", "> Bo requires 141"), said)
         visit(s); s.nextPlayer()
-        assertEquals(listOf("60", "> Bo, you require 141", "60", "> Ann, you require 81"), said)
+        assertEquals(listOf("60", "> Bo requires 141", "60", "> Ann requires 81"), said)
     }
 
     @Test fun theSettingTurnsItOff() {
@@ -57,6 +57,6 @@ class CallerTest {
     @Test fun aBuildWithoutAccountsKeepsEveryFeature() {
         val (s, said) = session(premium = null, full = true, start = 141)
         visit(s); s.nextPlayer()
-        assertEquals(listOf("60", "> Bo, you require 141"), said)
+        assertEquals(listOf("60", "> Bo requires 141"), said)
     }
 }
