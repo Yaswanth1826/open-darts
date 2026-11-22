@@ -31,6 +31,7 @@ import com.opendarts.game.party.HalveItGame
 import com.opendarts.game.party.KillerGame
 import com.opendarts.game.party.NumberRoundsGame
 import com.opendarts.game.practice.Bobs27Game
+import com.opendarts.game.practice.TargetDrillGame
 import com.opendarts.game.practice.CheckoutPracticeGame
 import com.opendarts.game.practice.JdcChallengeGame
 import com.opendarts.game.practice.OneTwentyOneGame
@@ -63,6 +64,7 @@ fun aimHint(game: DartGame<*>): String? {
     if (game.isFinished) return null
     return when (game) {
         is Bobs27Game -> game.currentTarget?.let { "AIM  D$it" }
+        is TargetDrillGame -> game.currentTarget?.let { "AIM  ${if (it == 25) "BULL" else "D$it"}" }
         is CheckoutPracticeGame -> game.remaining?.let { "CHECK OUT  $it" }
         is OneTwentyOneGame -> game.gameState.players[game.currentPlayerIndex].let { "TARGET  ${it.target}  \u00B7  ${game.dartsLeft(game.currentPlayerIndex)} DARTS" }
         is NumberRoundsGame -> game.currentNumber?.let { "AIM  $it" }

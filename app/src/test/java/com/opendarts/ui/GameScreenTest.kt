@@ -63,6 +63,9 @@ class GameScreenTest {
     fun HALVE_IT_screen() = play(GameKind.HALVE_IT, "game-halve_it")
 
     @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
+    fun WEAK_SPOTS_screen() = play(GameKind.WEAK_SPOTS, "game-weak_spots")
+
+    @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
     fun KILLER_screen() = play(GameKind.KILLER, "game-killer")
 
     @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")

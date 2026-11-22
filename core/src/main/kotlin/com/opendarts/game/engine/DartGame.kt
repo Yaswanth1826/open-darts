@@ -19,7 +19,7 @@ class FinishResult<S>(val state: S, val winners: List<Int>? = null)
 class AdvanceResult<S>(val state: S, val nextPlayer: Int? = null, val newRound: Int? = null)
 
 /** One dart that still counts, with the game as it was just before and just after it. */
-class Dart<S>(val player: Int, val hit: DartHit, val before: S, val after: S)
+class Dart<S>(val player: Int, val hit: DartHit, val before: S, val after: S, val round: Int = 1)
 
 /**
  * Base for every game. A game is a stack of immutable snapshots, so undo is exact and cheap and
@@ -94,7 +94,7 @@ abstract class DartGame<S : Any>(initialPlayers: List<Player>, val dartsPerTurn:
         get() {
             current()
             return history.indices.filter { i -> i > 0 && !history[i].transition && history[i].turn.isNotEmpty() }
-                .map { i -> Dart(history[i].player, history[i].turn.last(), history[i - 1].game, history[i].game) }
+                .map { i -> Dart(history[i].player, history[i].turn.last(), history[i - 1].game, history[i].game, history[i].round) }
         }
     val dartsLeftInTurn: Int get() = if (turnOver) 0 else dartsPerTurn - turnHits.size
 

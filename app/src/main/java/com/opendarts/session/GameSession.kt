@@ -169,6 +169,7 @@ class GameSession : ViewModel() {
     fun start(requested: GameSetup): Boolean {
         val newSetup = requested.copy(seed = Random.nextInt())
         if (newSetup.botLevel > 0 && entitlements?.access()?.premium == false) { paywallFeature = "the dart bot"; paywall = true; return false }
+        if (newSetup.kind == GameKind.WEAK_SPOTS && entitlements?.access()?.premium == false) { paywallFeature = "weak-spot drills"; paywall = true; return false }
         paywallFeature = null
         if (newSetup.input == InputMode.CAMERA && !claimCamera(newGame = true)) return false
         cameraCounted = newSetup.input == InputMode.CAMERA

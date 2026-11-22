@@ -31,6 +31,7 @@ import com.opendarts.game.party.NumberRoundsGame
 import com.opendarts.game.party.ShanghaiGame
 import com.opendarts.game.practice.AroundTheClockGame
 import com.opendarts.game.practice.Bobs27Game
+import com.opendarts.game.practice.TargetDrillGame
 import com.opendarts.game.practice.CheckoutPracticeGame
 import com.opendarts.game.practice.CLOCK_BULL_INDEX
 import com.opendarts.game.practice.CountUpGame
@@ -51,6 +52,7 @@ fun Scoreboard(game: DartGame<*>) {
         is CountUpGame -> CountUpBoard(game)
         is JdcChallengeGame -> JdcBoard(game)
         is Bobs27Game -> Bobs27Board(game)
+        is TargetDrillGame -> DrillBoard(game)
         is CheckoutPracticeGame -> CheckoutBoard(game)
         is OneTwentyOneGame -> OneTwentyOneBoard(game)
         is NumberRoundsGame -> NumberRoundsBoard(game)
@@ -236,6 +238,16 @@ private fun Bobs27Board(game: Bobs27Game) {
 }
 
 @Composable
+private fun DrillBoard(game: TargetDrillGame) {
+    val target = game.currentTarget
+    ListBoard(
+        game, if (target == null) "Drill complete" else "Round ${game.round.coerceAtMost(game.rounds)} of ${game.rounds} \u00B7 aim at ${if (target == 25) "the bull" else "D$target"}",
+        detail = { i, _ -> game.gameState.darts[i].let { "${game.gameState.hits[i]} of $it ${if (it == 1) "dart" else "darts"}" } },
+        value = { game.gameState.hits[it].toString() },
+    )
+}
+
+@Composable
 private fun CheckoutBoard(game: CheckoutPracticeGame) {
     val left = game.remaining
     ListBoard(
@@ -318,6 +330,7 @@ fun headline(game: DartGame<*>, index: Int): Pair<String, String> = when (game) 
     is CountUpGame -> game.gameState.scores[index].toString() to "points"
     is JdcChallengeGame -> game.gameState.players[index].total.toString() to "total"
     is Bobs27Game -> game.gameState.players[index].score.toString() to (if (game.gameState.players[index].out) "out" else "D${game.currentTarget ?: "-"}")
+    is TargetDrillGame -> game.gameState.hits[index].toString() to game.gameState.darts[index].let { "$it ${if (it == 1) "dart" else "darts"}" }
     is CheckoutPracticeGame -> game.gameState.checkouts[index].toString() to "checkouts"
     is OneTwentyOneGame -> game.gameState.players[index].let { p -> p.left.toString() to "target ${p.target} \u00B7 best ${if (p.best == 0) "-" else p.best.toString()}" }
     is NumberRoundsGame -> game.gameState.scores[index].toString() to (if (game is BaseballGame) "runs" else "points")

@@ -86,6 +86,9 @@ class HomeScreensTest {
         rule.onNodeWithText("Checkout practice").performClick()
         rule.waitForIdle()
         shot("new-checkout")
+        rule.onNodeWithText("Weak spots").performClick()
+        rule.waitForIdle()
+        shot("new-weak-spots")
     }
 
     @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")

@@ -59,6 +59,7 @@ object SetupCodec {
         "seed" to s.seed.toString(),
         "input" to s.input.name,
         "bot" to s.botLevel.toString(),
+        "drill" to s.drillTargets.joinToString("."),
     ).joinToString("\n") { (k, v) -> k + "=" + URLEncoder.encode(v, "UTF-8") }
 
     fun decode(text: String): GameSetup? = runCatching {
@@ -81,6 +82,7 @@ object SetupCodec {
             seed = map["seed"]?.toInt() ?: fresh.seed,
             input = InputMode.valueOf(get("input")),
             botLevel = map["bot"]?.toInt() ?: 0,
+            drillTargets = map["drill"]?.split('.')?.map { it.toInt() }?.takeIf { it.isNotEmpty() && it.all { t -> t in 1..20 || t == 25 } } ?: fresh.drillTargets,
         )
     }.getOrNull()
 }

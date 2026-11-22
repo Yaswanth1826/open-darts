@@ -57,6 +57,7 @@ import com.opendarts.session.canHaveBot
 import com.opendarts.session.x01Average
 import com.opendarts.session.PlayerStore
 import com.opendarts.session.category
+import com.opendarts.session.DrillPlan
 import com.opendarts.session.kinds
 import com.opendarts.session.minPlayers
 import com.opendarts.session.Roster
@@ -88,13 +89,14 @@ fun NewGameScreen(session: GameSession, onStart: () -> Unit, onBack: () -> Unit)
     val ready = roster.selected.size + (if (botLevel > 0) 1 else 0) >= setup.kind.minPlayers
     val firstPlayer = roster.chosenNames.firstOrNull()
     val ownLevel = remember(firstPlayer) { firstPlayer?.let { HistoryStore(context.applicationContext).all().x01Average(it) }?.coerceIn(20, 105) }
+    val drill = remember(firstPlayer) { DrillPlan.plan(HistoryStore(context.applicationContext).all(), firstPlayer) }
     val landscape = LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
 
     fun update(new: Roster) { roster = new; store.save(new) }
     fun toggle(i: Int) = update(roster.copy(selected = if (i in roster.selected) roster.selected - i else roster.selected + i))
     val start = {
         val names = roster.chosenNames + if (botLevel > 0) listOf("Bot " + DartBot.levelName(botLevel)) else emptyList()
-        if (session.start(setup.copy(playerNames = names, botLevel = botLevel))) onStart()
+        if (session.start(setup.copy(playerNames = names, botLevel = botLevel, drillTargets = drill.targets))) onStart()
     }
     val count = roster.selected.size + if (botLevel > 0) 1 else 0
     val summary = "${setup.kind.title}${if (setup.kind == GameKind.X01) " ${setup.x01.startingScore}" else ""} \u00B7 $count ${if (count == 1) "player" else "players"}"
@@ -105,7 +107,7 @@ fun NewGameScreen(session: GameSession, onStart: () -> Unit, onBack: () -> Unit)
                 if (landscape) PrimaryButton("Start game", start, enabled = ready, height = 44.dp)
             }
             val access = session.entitlements?.access()
-            val rules: @Composable () -> Unit = { RulesSection(setup, access) { session.draft = it } }
+            val rules: @Composable () -> Unit = { RulesSection(setup, access, drill) { session.draft = it } }
             val players: @Composable () -> Unit = {
                 PlayersSection(roster, if (botLevel > 0) 0 else setup.kind.minPlayers, onToggle = ::toggle, onEdit = { editing = it })
                 if (setup.kind.canHaveBot) BotSection(botLevel, ownLevel, premium = access?.premium != false) { session.draft = setup.copy(botLevel = it) }
@@ -139,7 +141,7 @@ fun NewGameScreen(session: GameSession, onStart: () -> Unit, onBack: () -> Unit)
 }
 
 @Composable
-private fun RulesSection(setup: GameSetup, access: Access?, onChange: (GameSetup) -> Unit) {
+private fun RulesSection(setup: GameSetup, access: Access?, drill: DrillPlan.Plan, onChange: (GameSetup) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Group("Game") {
             Segmented(Category.entries, setup.kind.category, { it.title }, { c -> if (c != setup.kind.category) onChange(setup.copy(kind = c.kinds.first())) })
@@ -191,6 +193,17 @@ private fun RulesSection(setup: GameSetup, access: Access?, onChange: (GameSetup
             }
             GameKind.BASEBALL -> Fixed("Fixed format: 9 innings, inning n is number n. Runs: single 1, double 2, treble 3. Most runs wins.")
             GameKind.HALVE_IT -> Fixed("Fixed format: start on 40. Targets: 15, 16, any double, 17, 18, any treble, 19, 20, bull. Miss them all in a visit and your score is halved.")
+            GameKind.WEAK_SPOTS -> {
+                Group("Your targets") {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        drill.targets.forEachIndexed { i, d -> OptionChip(DrillPlan.label(d), i < drill.personal, {}, enabled = false) }
+                    }
+                }
+                Fixed(
+                    (if (drill.personal > 0) "The highlighted doubles are the ones you finish least often. " else "Play more games, or this drill, to get doubles picked from your own darts. For now: the doubles that finish most legs. ") +
+                        "Everyone throws one visit at each double, twice through. Every dart in the double scores a point. Premium.",
+                )
+            }
             GameKind.KILLER -> Fixed("Everyone gets a number and 3 lives. Your own double makes you a killer; a killer's hit on another player's double takes a life. Last one standing wins.")
         }
         Group("Scoring") {

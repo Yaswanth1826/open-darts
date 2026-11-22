@@ -93,10 +93,10 @@ fun AdvancedCard(s: AdvancedStats) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Heading("Where your darts land")
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Heatmap(s.heat, Modifier.size(280.dp)) }
-            Text("Brighter means more darts. Singles, trebles and doubles are compared among themselves.", color = Pal.Muted, fontFamily = Body, fontSize = 12.sp)
+            Text("Brighter means more darts. Singles, trebles and doubles are compared among themselves. Doubles count X01 finishing tries and Weak spots drills.", color = Pal.Muted, fontFamily = Body, fontSize = 12.sp)
         }
         if (s.doubles.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Heading("Finishing per double")
+            Heading("Success per double")
             s.doubles.take(8).forEach { d ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(d.label, color = Pal.Text, fontFamily = Display, fontSize = 14.sp, modifier = Modifier.size(width = 44.dp, height = 20.dp))

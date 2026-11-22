@@ -3,6 +3,7 @@ package com.opendarts.session
 import com.opendarts.game.engine.DartGame
 import com.opendarts.game.model.DartHit
 import com.opendarts.game.model.Multiplier
+import com.opendarts.game.practice.TargetDrillGame
 import com.opendarts.game.x01.X01Game
 
 /**
@@ -40,7 +41,7 @@ object ShotCodes {
 data class ShotDetail(
     /** Every dart, see [ShotCodes]. */
     val shots: String = "",
-    /** X01 finishing attempts per double as "double-attempts-hits" groups joined by dots; the bull is 25. */
+    /** X01 finishing attempts and Weak spots darts per double as "double-attempts-hits" groups joined by dots; the bull is 25. */
     val doubles: String = "",
     /** Points and darts in the first nine darts of every leg. */
     val first9Points: Int = 0,
@@ -54,17 +55,21 @@ data class ShotDetail(
             val doubles = List(game.players.size) { sortedMapOf<Int, IntArray>() }
             val first9Points = IntArray(game.players.size)
             val first9Darts = IntArray(game.players.size)
+            fun tried(player: Int, double: Int, hit: Boolean) {
+                val counts = doubles[player].getOrPut(double) { IntArray(2) }
+                counts[0]++
+                if (hit) counts[1]++
+            }
+            if (game is TargetDrillGame) {
+                for (dart in game.trail) tried(dart.player, game.targetOf(dart.round), dart.hit.isDouble && dart.hit.base == game.targetOf(dart.round))
+            }
             if (game is X01Game) {
                 val thrownInLeg = HashMap<Pair<Int, Int>, Int>()
                 for (dart in game.trail) {
                     val before = dart.before.players[dart.player]
                     val after = dart.after.players[dart.player]
                     val double = doubleFor(before.remaining)
-                    if (before.isIn && double != null) {
-                        val counts = doubles[dart.player].getOrPut(double) { IntArray(2) }
-                        counts[0]++
-                        if (after.checkoutHits > before.checkoutHits) counts[1]++
-                    }
+                    if (before.isIn && double != null) tried(dart.player, double, after.checkoutHits > before.checkoutHits)
                     val leg = dart.before.legsPlayed
                     val thrown = thrownInLeg.merge(dart.player to leg, 1, Int::plus)!!
                     if (thrown <= 9) {

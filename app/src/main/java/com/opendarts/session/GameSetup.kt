@@ -20,6 +20,7 @@ import com.opendarts.game.practice.CountUpGame
 import com.opendarts.game.practice.JdcChallengeGame
 import com.opendarts.game.practice.OneTwentyOneConfig
 import com.opendarts.game.practice.OneTwentyOneGame
+import com.opendarts.game.practice.TargetDrillGame
 import com.opendarts.game.x01.X01Config
 import com.opendarts.game.x01.X01Game
 
@@ -36,6 +37,7 @@ enum class GameKind(val title: String, val blurb: String) {
     BASEBALL("Baseball", "Nine innings. Hit the inning's number: single 1 run, double 2, treble 3."),
     HALVE_IT("Halve It", "Hit the target of every round or your score is cut in half."),
     KILLER("Killer", "Hit your own double to become a killer, then take the others' lives. Needs 2+ players."),
+    WEAK_SPOTS("Weak spots", "A drill on your own weakest doubles. Two visits at each, every hit scores."),
 }
 
 /** Games the computer opponent knows how to play. */
@@ -53,7 +55,7 @@ val GameKind.category: Category
     get() = when (this) {
         GameKind.X01 -> Category.X01
         GameKind.CRICKET -> Category.CRICKET
-        GameKind.AROUND_THE_CLOCK, GameKind.COUNT_UP, GameKind.JDC_CHALLENGE, GameKind.BOBS_27, GameKind.CHECKOUT_PRACTICE, GameKind.ONE_TWENTY_ONE -> Category.PRACTICE
+        GameKind.AROUND_THE_CLOCK, GameKind.COUNT_UP, GameKind.JDC_CHALLENGE, GameKind.BOBS_27, GameKind.CHECKOUT_PRACTICE, GameKind.ONE_TWENTY_ONE, GameKind.WEAK_SPOTS -> Category.PRACTICE
         GameKind.SHANGHAI, GameKind.BASEBALL, GameKind.HALVE_IT, GameKind.KILLER -> Category.PARTY
     }
 
@@ -75,6 +77,8 @@ data class GameSetup(
     val input: InputMode = InputMode.CAMERA,
     /** 0 for no computer opponent; otherwise its X01 average. The bot is always the last player. */
     val botLevel: Int = 0,
+    /** The doubles of the Weak spots drill (25 is the bull), chosen when the game is set up. */
+    val drillTargets: List<Int> = DrillPlan.FALLBACK.take(DrillPlan.SIZE),
 ) {
     val players: List<Player>
         get() = playerNames.mapIndexed { i, name -> Player(i, name.trim().ifBlank { "Player ${i + 1}" }, if (i == playerNames.lastIndex) botLevel else 0) }
@@ -92,6 +96,7 @@ data class GameSetup(
         GameKind.BASEBALL -> BaseballGame(players)
         GameKind.HALVE_IT -> HalveItGame(players)
         GameKind.KILLER -> KillerGame(players, seed)
+        GameKind.WEAK_SPOTS -> TargetDrillGame(players, drillTargets)
     }
 
     /** Short heading shown on the setup and game screens. */
@@ -120,6 +125,7 @@ data class GameSetup(
                 GameKind.BASEBALL -> "9 INNINGS"
                 GameKind.HALVE_IT -> "9 ROUNDS"
                 GameKind.KILLER -> "3 LIVES"
+                GameKind.WEAK_SPOTS -> "${drillTargets.size} DOUBLES"
             }
             return first to second
         }
@@ -147,6 +153,7 @@ data class GameSetup(
             GameKind.BASEBALL -> "9 innings"
             GameKind.HALVE_IT -> "9 rounds"
             GameKind.KILLER -> "3 lives"
+            GameKind.WEAK_SPOTS -> drillTargets.joinToString(" ") { DrillPlan.label(it) }
         }
 }
 
