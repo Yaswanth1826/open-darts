@@ -94,8 +94,8 @@ fun SettingsScreen(entitlements: RemoteEntitlements, billing: PlayBilling) {
                 Column(Modifier.weight(1f)) {
                     Text("Call what you require", color = if (premium) Pal.Text else Pal.Muted, fontFamily = Display, fontSize = 17.sp)
                     Text(
-                        if (premium) "After each X01 visit the caller says how much the player needs to finish."
-                        else "Premium: after each X01 visit the caller says how much the player needs to finish.",
+                        if (premium) "In X01, as a player steps up within checkout range, the caller says how much they need."
+                        else "Premium: in X01, as a player steps up within checkout range, the caller says how much they need.",
                         color = Pal.Muted, fontFamily = Body, fontSize = 13.sp,
                     )
                 }

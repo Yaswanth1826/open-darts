@@ -133,8 +133,9 @@ fun GameScreen(session: GameSession, onExit: () -> Unit, onCalibrate: () -> Unit
     DisposableEffect(session, announcer) {
         session.onDart = { announcer.dart() }
         session.onVisit = announcer::say
+        session.onTurn = announcer::sayNext
         session.fullCaller = SoundSetting.fullCaller(context)
-        onDispose { session.onDart = null; session.onVisit = null; announcer.release() }
+        onDispose { session.onDart = null; session.onVisit = null; session.onTurn = null; announcer.release() }
     }
     val game = session.game ?: return
     BotDriver(session)

@@ -14,16 +14,39 @@ import org.junit.Test
 class RequirementCallTest {
     private fun game(start: Int = 501) = X01Game(listOf(Player(0, "Ann"), Player(1, "Bo")), X01Config(start, InOut.STRAIGHT, InOut.DOUBLE))
 
-    @Test fun theCallerNamesTheThrowerAndWhatIsLeft() {
+    @Test fun nothingIsSaidFarFromAFinish() {
         val g = game()
+        assertNull(VisitCall.requirement(g))
         repeat(3) { g.throwDart(DartHit.single(20)) }
-        assertEquals("Ann, you require 441", VisitCall.requirement(g))
+        g.endTurn()
+        assertNull(VisitCall.requirement(g))
+    }
+
+    @Test fun theNextPlayerHearsTheirScoreWhenInRange() {
+        val g = game(170)
+        assertEquals("Ann, you require 170", VisitCall.requirement(g))
+        g.throwDart(DartHit.single(20)); g.endTurn()
+        assertEquals("Bo, you require 170", VisitCall.requirement(g))
+    }
+
+    @Test fun aScoreNobodyCanCheckOutIsNotCalled() {
+        assertNull(VisitCall.requirement(game(169)))
+        assertNull(VisitCall.requirement(game(168)))
+        assertEquals("Ann, you require 167", VisitCall.requirement(game(167)))
     }
 
     @Test fun aBustLeavesTheScoreAsItWas() {
         val g = game(40)
         g.throwDart(DartHit.single(20)); g.throwDart(DartHit.single(20))
+        g.endTurn()
+        assertEquals("Bo, you require 40", VisitCall.requirement(g))
+        g.endTurn()
         assertEquals("Ann, you require 40", VisitCall.requirement(g))
+    }
+
+    @Test fun aPlayerNotYetInIsNotTold() {
+        val g = X01Game(listOf(Player(0, "Ann")), X01Config(40, InOut.DOUBLE, InOut.DOUBLE))
+        assertNull(VisitCall.requirement(g))
     }
 
     @Test fun nothingIsRequiredOnceTheLegIsWon() {

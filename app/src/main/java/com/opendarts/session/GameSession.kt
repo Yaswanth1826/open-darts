@@ -121,7 +121,10 @@ class GameSession : ViewModel() {
     var onDart: ((DartHit) -> Unit)? = null
     var onVisit: ((String) -> Unit)? = null
 
-    /** Set by the screen from the settings: the caller adds what the player requires, for premium players. */
+    /** Set by the screen: said after the visit call, as the next player steps up (queued behind it). */
+    var onTurn: ((String) -> Unit)? = null
+
+    /** Set by the screen from the settings: the caller tells a player in checkout range what they require, for premium players. */
     var fullCaller = false
 
     /** The latest visit call, for the screen to flash; the screen clears it once shown. */
@@ -133,8 +136,12 @@ class GameSession : ViewModel() {
 
     private fun visitEnded(g: DartGame<*>, call: String) {
         callout = Callout.of(g.currentPlayer.name, call, ++calloutId)
-        val required = if (fullCaller && entitlements?.access()?.premium != false) VisitCall.requirement(g) else null
-        onVisit?.invoke(if (required == null) call else "$call. $required")
+        onVisit?.invoke(call)
+    }
+
+    private fun turnStarted(g: DartGame<*>) {
+        if (g.isFinished || g.currentPlayer.isBot || !fullCaller || entitlements?.access()?.premium == false) return
+        VisitCall.requirement(g)?.let { onTurn?.invoke(it) }
     }
 
     /** After a bust or a leg won with fewer than three darts, further darts do not count; the camera still sees them until the board is cleared. */
@@ -289,6 +296,7 @@ class GameSession : ViewModel() {
         trace.sync(0)
         message = "${g.currentPlayer.name} to throw"
         changed()
+        turnStarted(g)
     }
 
     /** Goes back to the previous player's turn, keeping their darts so they can be corrected. */

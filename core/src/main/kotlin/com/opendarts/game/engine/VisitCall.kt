@@ -1,6 +1,7 @@
 package com.opendarts.game.engine
 
 import com.opendarts.game.practice.CountUpGame
+import com.opendarts.game.x01.Checkout
 import com.opendarts.game.x01.X01Game
 
 /** What is said out loud when a visit (the player's three darts) ends. Only games where the visit total matters have a call. */
@@ -23,11 +24,15 @@ object VisitCall {
         }
     }
 
-    /** What the player who has just finished a visit needs to finish the leg, e.g. "Ann, you require 121"; null when the leg is won or the game has no score to count down. */
+    /**
+     * Said as a player steps up: what they need to finish the leg, e.g. "Ann, you require 121". Only when they are in the game and
+     * the score can be finished with three darts; null otherwise (far from a finish, a score nobody can check out, or not X01).
+     */
     fun requirement(game: DartGame<*>): String? {
         if (game !is X01Game) return null
-        val remaining = game.gameState.players[game.currentPlayerIndex].remaining
-        return if (remaining <= 0) null else "${game.currentPlayer.name}, you require $remaining"
+        val p = game.gameState.players[game.currentPlayerIndex]
+        if (!p.isIn || p.remaining <= 0 || Checkout.suggest(p.remaining, game.config.outMode) == null) return null
+        return "${game.currentPlayer.name}, you require ${p.remaining}"
     }
 
     private const val NO_SCORE = "No score"

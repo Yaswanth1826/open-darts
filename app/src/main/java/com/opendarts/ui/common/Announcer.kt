@@ -40,8 +40,13 @@ class Announcer(context: Context) {
         if (enabled) runCatching { tone?.startTone(ToneGenerator.TONE_PROP_BEEP, 90) }
     }
 
-    fun say(text: String) {
-        if (enabled && ready) runCatching { speech?.setSpeechRate(SoundSetting.speed(appContext).rate); speech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "visit") }
+    fun say(text: String) = speak(text, TextToSpeech.QUEUE_FLUSH)
+
+    /** Said after whatever is being spoken, instead of cutting it off. */
+    fun sayNext(text: String) = speak(text, TextToSpeech.QUEUE_ADD)
+
+    private fun speak(text: String, mode: Int) {
+        if (enabled && ready) runCatching { speech?.setSpeechRate(SoundSetting.speed(appContext).rate); speech?.speak(text, mode, null, "visit") }
     }
 
     fun release() {
