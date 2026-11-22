@@ -15,7 +15,7 @@ DeepDarts dataset
 
 TRAINING SOFTWARE
 
-Ultralytics YOLOv8 (AGPL-3.0), https://github.com/ultralytics/ultralytics, was used to train the detector.
+YOLOX (Apache License 2.0, Megvii), https://github.com/Megvii-BaseDetection/YOLOX, was used to train the detector.
 
 FONT
 

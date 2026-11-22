@@ -64,7 +64,7 @@ class TfliteDartNet private constructor(private val interpreter: Interpreter) : 
         private const val PREFS = "opendarts_detector"
         private const val CHOSEN = "asset"
         /** Evaluation builds carry several detectors side by side; this is the order they are offered in. */
-        private val KNOWN = listOf("dartnet_yolox_tiny.tflite", "dartnet_yolox_nano.tflite", "dartnet_yolov8n.tflite")
+        private val KNOWN = listOf("dartnet_yolox_tiny.tflite", "dartnet_yolox_nano.tflite")
 
         /** Every detector file shipped in the app. A release has just [ASSET], so nothing is offered there. */
         fun available(context: Context): List<String> {
@@ -75,7 +75,6 @@ class TfliteDartNet private constructor(private val interpreter: Interpreter) : 
         fun label(asset: String): String = when (asset) {
             "dartnet_yolox_tiny.tflite" -> "YOLOX-Tiny"
             "dartnet_yolox_nano.tflite" -> "YOLOX-Nano"
-            "dartnet_yolov8n.tflite" -> "YOLOv8n"
             else -> asset.removePrefix("dartnet").removePrefix("_").removeSuffix(".tflite").replace('_', ' ').ifBlank { "Default" }
         }
 
