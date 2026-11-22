@@ -18,6 +18,9 @@ class StepResult<S>(
 class FinishResult<S>(val state: S, val winners: List<Int>? = null)
 class AdvanceResult<S>(val state: S, val nextPlayer: Int? = null, val newRound: Int? = null)
 
+/** One dart that still counts, with the game as it was just before and just after it. */
+class Dart<S>(val player: Int, val hit: DartHit, val before: S, val after: S)
+
 /**
  * Base for every game. A game is a stack of immutable snapshots, so undo is exact and cheap and
  * manual taps and camera detections drive exactly the same API.
@@ -85,6 +88,14 @@ abstract class DartGame<S : Any>(initialPlayers: List<Player>, val dartsPerTurn:
     val isFinished: Boolean get() = current().winners != null
     val lastOutcome: Outcome get() = current().outcome
     val canUndo: Boolean get() = history.size > 1
+
+    /** Every dart that still counts, in the order thrown: undone darts are gone and edited ones show as edited. */
+    val trail: List<Dart<S>>
+        get() {
+            current()
+            return history.indices.filter { i -> i > 0 && !history[i].transition && history[i].turn.isNotEmpty() }
+                .map { i -> Dart(history[i].player, history[i].turn.last(), history[i - 1].game, history[i].game) }
+        }
     val dartsLeftInTurn: Int get() = if (turnOver) 0 else dartsPerTurn - turnHits.size
 
     fun throwDart(hit: DartHit): Outcome {

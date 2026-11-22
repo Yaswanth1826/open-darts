@@ -114,7 +114,7 @@ class HistoryTest {
     @Test
     fun aRecordSavedBeforeBotsExistedStillLoads() {
         val record = MatchRecord(1, GameKind.X01, "501", InputMode.MANUAL, 2, listOf(MatchPlayer("Ann", true, darts = 33, points = 400)))
-        val old = HistoryCodec.encode(record).replace(",false;", ";").removeSuffix(",false")
+        val old = HistoryCodec.encode(record).split('|').let { f -> (f.take(5) + f[5].split(';').joinToString(";") { it.split(',').take(12).joinToString(",") }).joinToString("|") }
         assertEquals(record, HistoryCodec.decode(old))
     }
 

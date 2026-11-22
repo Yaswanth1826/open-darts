@@ -22,6 +22,8 @@ data class MatchPlayer(
     val sets: Int = 0,
     /** A computer opponent: it is listed in the game but has no figures of its own. */
     val bot: Boolean = false,
+    /** Where every dart landed and the finishing and first-nine figures built from them. */
+    val detail: ShotDetail = ShotDetail(),
 ) {
     /** Three-dart average. */
     val average: Double get() = if (darts == 0) 0.0 else points * 3.0 / darts
@@ -43,13 +45,14 @@ data class MatchRecord(
         fun of(id: Long, setup: GameSetup, game: DartGame<*>): MatchRecord {
             val x01 = (game as? X01Game)?.gameState?.players
             val won = game.winners.orEmpty()
+            val details = ShotDetail.of(game)
             val players = game.players.mapIndexed { i, player ->
                 val s = x01?.getOrNull(i)
                 MatchPlayer(
                     name = player.name, won = i in won,
                     darts = s?.totalDarts ?: 0, points = s?.totalPoints ?: 0, bestVisit = s?.highestVisit ?: 0,
                     hundredPlus = s?.hundredPlus ?: 0, oneFortyPlus = s?.oneFortyPlus ?: 0, oneEighties = s?.oneEighties ?: 0,
-                    finishingDarts = s?.finishingDarts ?: 0, checkoutHits = s?.checkoutHits ?: 0, legs = s?.legs ?: 0, sets = s?.sets ?: 0, bot = player.isBot,
+                    finishingDarts = s?.finishingDarts ?: 0, checkoutHits = s?.checkoutHits ?: 0, legs = s?.legs ?: 0, sets = s?.sets ?: 0, bot = player.isBot, detail = details[i],
                 )
             }
             return MatchRecord(id, setup.kind, setup.title, setup.input, game.round, players)
@@ -114,7 +117,7 @@ object HistoryCodec {
 
     fun encode(r: MatchRecord): String {
         val players = r.players.joinToString(";") { p ->
-            listOf(enc(p.name), p.won, p.darts, p.points, p.bestVisit, p.hundredPlus, p.oneFortyPlus, p.oneEighties, p.finishingDarts, p.checkoutHits, p.legs, p.sets, p.bot).joinToString(",")
+            listOf(enc(p.name), p.won, p.darts, p.points, p.bestVisit, p.hundredPlus, p.oneFortyPlus, p.oneEighties, p.finishingDarts, p.checkoutHits, p.legs, p.sets, p.bot, p.detail.shots, p.detail.doubles, p.detail.first9Points, p.detail.first9Darts).joinToString(",")
         }
         return listOf(r.id.toString(), r.kind.name, enc(r.title), r.input.name, r.rounds.toString(), players).joinToString("|")
     }
@@ -123,7 +126,8 @@ object HistoryCodec {
         val f = line.split('|')
         val players = f[5].split(';').filter { it.isNotEmpty() }.map { text ->
             val p = text.split(',')
-            MatchPlayer(dec(p[0]), p[1].toBoolean(), p[2].toInt(), p[3].toInt(), p[4].toInt(), p[5].toInt(), p[6].toInt(), p[7].toInt(), p[8].toInt(), p[9].toInt(), p[10].toInt(), p[11].toInt(), p.getOrNull(12).toBoolean())
+            MatchPlayer(dec(p[0]), p[1].toBoolean(), p[2].toInt(), p[3].toInt(), p[4].toInt(), p[5].toInt(), p[6].toInt(), p[7].toInt(), p[8].toInt(), p[9].toInt(), p[10].toInt(), p[11].toInt(), p.getOrNull(12).toBoolean(),
+                detail = ShotDetail(p.getOrNull(13).orEmpty(), p.getOrNull(14).orEmpty(), p.getOrNull(15)?.toIntOrNull() ?: 0, p.getOrNull(16)?.toIntOrNull() ?: 0))
         }
         MatchRecord(f[0].toLong(), GameKind.valueOf(f[1]), dec(f[2]), InputMode.valueOf(f[3]), f[4].toInt(), players)
     }.getOrNull()

@@ -60,7 +60,7 @@ fun PaywallDialog(account: RemoteEntitlements, billing: PlayBilling, onKeypad: (
                     Text(if (feature == null) "Your $FREE_CAMERA_GAMES free camera games are used" else "Premium feature", color = Pal.Text, fontFamily = Display, fontSize = 22.sp)
                     Text(
                         if (feature == null) "Subscribe to keep scoring every dart automatically. The keypad stays free, with every game mode and unlimited matches."
-                        else "Playing against $feature is part of Premium. Every game on the keypad against people stays free.",
+                        else "Using $feature is part of Premium. Every game on the keypad, the history and the basic stats stay free.",
                         color = Pal.Muted, fontFamily = Body, fontSize = 15.sp,
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -73,7 +73,7 @@ fun PaywallDialog(account: RemoteEntitlements, billing: PlayBilling, onKeypad: (
                 }
             }
             (account.message ?: billing.message)?.let { Text(it, color = Pal.Muted, fontFamily = Body, fontSize = 13.sp) }
-            OutlineButton(if (feature == null) "Play with the keypad" else "Play without it", onKeypad, Modifier.fillMaxWidth())
+            OutlineButton(if (feature == null) "Play with the keypad" else "Not now", onKeypad, Modifier.fillMaxWidth())
         }
     }
 }

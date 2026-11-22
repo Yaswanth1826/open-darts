@@ -45,7 +45,7 @@ import java.util.Locale
 
 /** The Stats tab: every player's figures over all finished games, and the list of those games. */
 @Composable
-fun StatsScreen(history: MatchHistory? = null) {
+fun StatsScreen(history: MatchHistory? = null, premium: Boolean = false, onUpgrade: () -> Unit = {}) {
     val context = LocalContext.current
     val book = remember { history ?: HistoryStore(context) }
     val roster = remember { PlayerStore(context).load().names }
@@ -64,6 +64,7 @@ fun StatsScreen(history: MatchHistory? = null) {
             } else {
                 SectionLabel("Players")
                 stats.forEach { PlayerCard(it, roster.indexOf(it.name).coerceAtLeast(0)) }
+                AdvancedPanel(records, stats.map { it.name }.take(4), premium, onUpgrade)
                 SectionLabel("Recent games", Modifier.padding(top = 6.dp))
                 records.take(50).forEach { MatchRow(it) { open = it } }
                 OutlineButton("Clear history", { confirmClear = true }, Modifier.fillMaxWidth().padding(top = 8.dp), height = 48.dp)

@@ -5,6 +5,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.core.view.drawToBitmap
 import androidx.test.core.app.ApplicationProvider
 import com.opendarts.session.GameKind
@@ -95,6 +97,26 @@ class HomeScreensTest {
         rule.onNodeWithText("Club \u00B7 60").performScrollTo().performClick()
         rule.waitForIdle()
         shot("new-bot")
+    }
+
+    @Test @Config(qualifiers = "w360dp-h1500dp-port-xxhdpi")
+    fun theAdvancedStatsShowWhereTheDartsGo() {
+        val random = kotlin.random.Random(7)
+        val aims = List(120) { com.opendarts.game.model.DartHit.treble(20) } + List(40) { com.opendarts.game.model.DartHit.treble(19) } + List(40) { com.opendarts.game.model.DartHit.double(16) } + List(20) { com.opendarts.game.model.DartHit.double(8) }
+        val shots = aims.map { com.opendarts.game.bot.DartBot.land(it, 60, random) }.joinToString("") { com.opendarts.session.ShotCodes.encode(it).toString() }
+        val records = (1..6).map { n ->
+            MatchRecord(n * 1000L, GameKind.X01, "501", InputMode.CAMERA, 11, listOf(MatchPlayer("Player 1", true, darts = 60, points = 380 + n * 25, detail = com.opendarts.session.ShotDetail(shots, "16-9-3.8-5-2.20-4-2", 120 + n * 10, 18))))
+        }
+        rule.setContent { OpenDartsTheme { androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(16.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) { com.opendarts.ui.home.AdvancedPanel(records, listOf("Player 1"), true) {} } } }
+        rule.waitForIdle()
+        shot("advanced-stats")
+    }
+
+    @Test @Config(qualifiers = "w360dp-h400dp-port-xxhdpi")
+    fun theAdvancedStatsAreLockedForFreePlayers() {
+        rule.setContent { OpenDartsTheme { androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(16.dp)) { com.opendarts.ui.home.AdvancedPanel(emptyList(), listOf("Player 1"), false) {} } } }
+        rule.waitForIdle()
+        shot("advanced-stats-locked")
     }
 
     @Test @Config(qualifiers = "w700dp-h360dp-land-xxhdpi")

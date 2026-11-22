@@ -68,7 +68,7 @@ fun OpenDartsApp() {
                             "${session.setup.title} \u00B7 ${g.players.joinToString(" vs ") { it.name }} \u00B7 round ${g.round}"
                         } ?: "",
                     )
-                    Tab.STATS -> StatsScreen(history)
+                    Tab.STATS -> StatsScreen(history, premium = entitlements.access().premium, onUpgrade = { session.paywallFeature = "advanced stats"; session.paywall = true })
                     Tab.SETTINGS -> SettingsScreen(entitlements, billing)
                 }
             }
