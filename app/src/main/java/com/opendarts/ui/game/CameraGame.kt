@@ -155,8 +155,8 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
         )
     }
     val bull = session.bullOff
-    LaunchedEffect(bull?.next, bull?.round, bull?.tosses?.size) {
-        if (bull != null && bull.next != null && bull.next == bull.bot) {
+    LaunchedEffect(bull?.next, bull?.round, bull?.tosses?.size, session.bullOffWait) {
+        if (bull != null && bull.next != null && bull.next == bull.bot && !session.bullOffWait) {
             kotlinx.coroutines.delay(1000)
             session.bullOffBot()
         }

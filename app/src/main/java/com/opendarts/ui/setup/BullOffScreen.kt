@@ -69,7 +69,7 @@ fun BullOffScreen(names: List<String>, botIndex: Int, botAverage: Int, onWinner:
             }
             Column(Modifier.fillMaxWidth().background(Pal.Surface).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 BullOffControls(
-                    names, state, handEntry = true, hint = null,
+                    names, state, handEntry = true, hint = null, waiting = false, onOut = {},
                     onToss = { state = state.thrown(state.next ?: return@BullOffControls, it) },
                     onAgain = { state = state.again() }, onCloser = { state = state.closer(it) }, onUndo = { state = state.undone() }, onStart = onWinner,
                 )
@@ -85,12 +85,13 @@ fun BullOffPanel(session: GameSession, modifier: Modifier = Modifier) {
     val names = session.game?.players?.map { it.name } ?: return
     Column(modifier.fillMaxWidth().panel(18.dp).padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "Bull-off" + (if (state.round > 1) " \u00B7 round ${state.round}" else "") + ": everyone throws one dart at the bull and leaves it in. The closest to the centre throws first.",
+            "Bull-off" + (if (state.round > 1) " \u00B7 round ${state.round}" else "") + ": everyone throws one dart at the bull, one at a time. Take each dart out after it is read. The closest to the centre throws first.",
             color = Pal.Muted, fontFamily = Body, fontSize = 13.sp,
         )
         Column(Modifier.heightIn(max = 190.dp).verticalScroll(rememberScrollState())) { BullOffRows(names, state, compact = true) }
         BullOffControls(
-            names, state, handEntry = false, hint = "Take the darts out of the board and ${state.winner?.let { names[it] }} throws first.",
+            names, state, handEntry = false, waiting = session.bullOffWait, onOut = session::bullOffDartOut,
+            hint = "${state.winner?.let { names[it] }} throws first once the dart is out of the board.",
             onToss = {}, onAgain = session::bullOffAgain, onCloser = session::bullOffCloser, onUndo = session::bullOffUndo, onStart = { session.bullOffStart(forget = true) },
         )
     }
@@ -126,7 +127,7 @@ private fun BullOffRows(names: List<String>, state: BullOffState, compact: Boole
 /** What the players can do now. [handEntry] gives buttons for entering a dart; without it the camera reads the darts. */
 @Composable
 private fun BullOffControls(
-    names: List<String>, state: BullOffState, handEntry: Boolean, hint: String?,
+    names: List<String>, state: BullOffState, handEntry: Boolean, hint: String?, waiting: Boolean, onOut: () -> Unit,
     onToss: (Toss) -> Unit, onAgain: () -> Unit, onCloser: (Int) -> Unit, onUndo: () -> Unit, onStart: (Int) -> Unit,
 ) {
     val winner = state.winner
@@ -134,13 +135,17 @@ private fun BullOffControls(
     when {
         winner != null -> {
             Text("${names[winner]} throws first", color = Pal.Text, fontFamily = Display, fontSize = 20.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            if (hint != null) Text(hint, color = Pal.Muted, fontFamily = Body, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            if (hint != null && waiting) Text(hint, color = Pal.Muted, fontFamily = Body, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             PrimaryButton("Start game", { onStart(winner) }, Modifier.fillMaxWidth(), height = 48.dp)
         }
         state.tied -> {
             Text("Tied. Throw again, or choose who was closer.", color = Pal.Text, fontFamily = Body, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             PrimaryButton("Throw again", onAgain, Modifier.fillMaxWidth(), height = 48.dp)
             state.leaders.forEach { OutlineButton("${names[it]} was closer", { onCloser(it) }, Modifier.fillMaxWidth(), height = 44.dp) }
+        }
+        waiting && next != null -> {
+            Text("Take the dart out of the board, then ${names[next]} throws.", color = Pal.Text, fontFamily = Body, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            OutlineButton("The dart is out", onOut, Modifier.fillMaxWidth(), height = 44.dp)
         }
         next == state.bot -> Text("${names[next!!]} is throwing\u2026", color = Pal.Muted, fontFamily = Body, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().height(48.dp))
         next != null && handEntry -> {
@@ -151,7 +156,7 @@ private fun BullOffControls(
                 OutlineButton("Miss", { onToss(Toss(DartHit.MISS)) }, Modifier.weight(1f))
             }
         }
-        next != null -> Text("${names[next]}: throw at the bull and leave the dart in.", color = Pal.Text, fontFamily = Body, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        next != null -> Text("${names[next]}: throw at the bull.", color = Pal.Text, fontFamily = Body, fontSize = 15.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     }
     if (state.tosses.isNotEmpty() && next != state.bot) {
         TextButton(onClick = onUndo, modifier = Modifier.fillMaxWidth()) { Text(if (handEntry) "Undo last dart" else "Wrong read? Remove that dart and throw again", color = Pal.Muted) }
