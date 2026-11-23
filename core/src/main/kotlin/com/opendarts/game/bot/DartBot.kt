@@ -67,7 +67,7 @@ object DartBot {
         return BoardGeometry.hitAt(centre.x + gauss(random) * s, centre.y + gauss(random) * s)
     }
 
-    private fun gauss(random: Random): Double {
+    internal fun gauss(random: Random): Double {
         val u = random.nextDouble().coerceAtLeast(1e-12)
         return sqrt(-2.0 * ln(u)) * cos(2 * Math.PI * random.nextDouble())
     }

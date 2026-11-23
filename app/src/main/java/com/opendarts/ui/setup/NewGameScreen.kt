@@ -105,7 +105,8 @@ fun NewGameScreen(session: GameSession, onStart: () -> Unit, onBack: () -> Unit)
         val ready = setup.copy(playerNames = names, botLevel = botLevel, botSeat = -1, drillTargets = drill.targets)
         when {
             !session.preflight(ready) -> {}
-            bullOffOn && setup.kind.hasBullOff && names.size >= 2 -> bullOff = ready
+            bullOffOn && setup.kind.hasBullOff && names.size >= 2 && ready.input == InputMode.MANUAL -> bullOff = ready
+            bullOffOn && setup.kind.hasBullOff && names.size >= 2 -> if (session.start(ready)) { session.beginBullOff(); onStart() }
             session.start(ready) -> onStart()
         }
     }
@@ -315,7 +316,7 @@ private fun BullOffOption(on: Boolean, onChange: (Boolean) -> Unit) {
         Row(Modifier.fillMaxWidth().panel(18.dp).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Bull-off", color = Pal.Text, fontFamily = Display, fontSize = 17.sp)
-                Text("Everyone throws at the bull before the game; the closest throws first.", color = Pal.Muted, fontFamily = Body, fontSize = 13.sp)
+                Text("Everyone throws at the bull before the game; the closest throws first. With the camera the distance from the bull decides.", color = Pal.Muted, fontFamily = Body, fontSize = 13.sp)
             }
             Switch(
                 checked = on, onCheckedChange = onChange,

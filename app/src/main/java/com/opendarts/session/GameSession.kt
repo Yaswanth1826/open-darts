@@ -7,12 +7,15 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import com.opendarts.billing.EntitlementProvider
 import com.opendarts.game.bot.DartBot
+import com.opendarts.game.engine.BullOff
+import com.opendarts.game.engine.BullOffState
 import com.opendarts.game.engine.DartGame
 import com.opendarts.game.engine.DartTrace
 import com.opendarts.game.engine.GameAction
 import com.opendarts.game.engine.GameLog
 import com.opendarts.game.engine.TurnTrace
 import com.opendarts.game.engine.Outcome
+import com.opendarts.game.engine.Toss
 import com.opendarts.game.engine.VisitCall
 import com.opendarts.game.model.DartHit
 import com.opendarts.geometry.Point
@@ -191,6 +194,11 @@ class GameSession : ViewModel() {
         if (!preflight(newSetup)) return false
         if (newSetup.input == InputMode.CAMERA && !claimCamera(newGame = true)) return false
         cameraCounted = newSetup.input == InputMode.CAMERA
+        begin(newSetup)
+        return true
+    }
+
+    private fun begin(newSetup: GameSetup) {
         setup = newSetup
         game = newSetup.buildGame()
         gameId = System.currentTimeMillis()
@@ -198,12 +206,57 @@ class GameSession : ViewModel() {
         turnEndedEarly = false
         cameraMemory = null
         callout = null
+        bullOff = null
         log.clear()
         trace.sync(0)
         message = "${game!!.currentPlayer.name} to throw"
         dismissedResult = false
         changed()
-        return true
+    }
+
+    /** The camera bull-off that is running before the game, or null. While it runs the camera's darts go to it, not to the game. */
+    var bullOff by mutableStateOf<BullOffState?>(null)
+        private set
+
+    /** Right after [start]: has the players throw at the bull first. The game begins, with the winner first, in [bullOffStart]. */
+    fun beginBullOff() {
+        val g = game ?: return
+        if (g.players.size < 2) return
+        bullOff = BullOffState(g.players.size, setup.botIndex)
+        message = "Bull-off: the closest to the bull throws first"
+    }
+
+    private fun bullOffDart(hit: DartHit, spot: Point?) {
+        val s = bullOff ?: return
+        val player = s.next ?: return
+        if (player == s.bot) return
+        bullOff = s.thrown(player, Toss(hit, spot?.x, spot?.y))
+    }
+
+    /** The bot's turn at the bull. */
+    fun bullOffBot() {
+        val s = bullOff ?: return
+        val player = s.next ?: return
+        if (player == s.bot) bullOff = s.thrown(player, BullOff.botToss(setup.botLevel))
+    }
+
+    fun bullOffAgain() { bullOff = bullOff?.again() }
+
+    fun bullOffCloser(player: Int) { bullOff = bullOff?.closer(player) }
+
+    /** Takes back the latest dart; the camera is told to ignore it, so the player takes it out of the board and throws again. */
+    fun bullOffUndo() {
+        val s = bullOff ?: return
+        if (s.picked == null) s.tosses.values.lastOrNull()?.let { if (it.x != null && it.y != null) onForget?.invoke(Point(it.x!!, it.y!!)) }
+        bullOff = s.undone()
+    }
+
+    /** Starts the game with the bull-off winner throwing first. [forget] when the darts are still in the board, so the camera does not count them. */
+    fun bullOffStart(forget: Boolean) {
+        val s = bullOff ?: return
+        val first = s.winner ?: return
+        if (forget) s.tosses.values.forEach { if (it.x != null && it.y != null) onForget?.invoke(Point(it.x!!, it.y!!)) }
+        begin(setup.startingWith(first))
     }
 
     fun rematch() { start(setup) }
@@ -212,6 +265,7 @@ class GameSession : ViewModel() {
     fun switchInput(mode: InputMode) {
         if (mode == InputMode.CAMERA && !claimCamera(newGame = false)) return
         cameraCounted = cameraCounted || mode == InputMode.CAMERA
+        bullOff = null
         setup = setup.copy(input = mode)
         cameraMemory = null
         changed()
@@ -220,6 +274,7 @@ class GameSession : ViewModel() {
     /** Quits for good: the unfinished game is thrown away. (Leaving the screen with Back keeps it for Resume.) */
     fun leave() {
         game = null
+        bullOff = null
         cameraMemory = null
         callout = null
         log.clear()
@@ -229,6 +284,7 @@ class GameSession : ViewModel() {
 
     fun throwDart(hit: DartHit, fromCamera: Boolean = false, spot: Point? = null, behind: Int? = null, byBot: Boolean = false) {
         val g = game ?: return
+        if (bullOff != null) { if (fromCamera) bullOffDart(hit, spot); return }
         if (g.isFinished) return
         if (!byBot) {
             if (g.currentPlayer.isBot) return
@@ -268,6 +324,7 @@ class GameSession : ViewModel() {
 
     fun undo() {
         val g = game ?: return
+        if (bullOff != null) return
         turnEndedEarly = false
         val before = g.turnHits.size
         val seenAt = if (before > 0) trace.spotOf(before - 1) else null
@@ -281,7 +338,7 @@ class GameSession : ViewModel() {
 
     /** The player to throw has finished (or leaves): hands over to the next one. Not while a bot is throwing. */
     fun nextPlayer() {
-        if (game?.currentPlayer?.isBot == true) return
+        if (bullOff != null || game?.currentPlayer?.isBot == true) return
         advance()
     }
 
@@ -312,6 +369,7 @@ class GameSession : ViewModel() {
     /** Goes back to the previous player's turn, keeping their darts so they can be corrected. */
     fun previousPlayer() {
         val g = game ?: return
+        if (bullOff != null) return
         turnEndedEarly = false
         if (g.previousPlayer()) {
             log.add(GameAction.Previous)
@@ -332,7 +390,7 @@ class GameSession : ViewModel() {
      */
     fun editDart(index: Int, hit: DartHit?) {
         val g = game ?: return
-        if (g.currentPlayer.isBot) return
+        if (bullOff != null || g.currentPlayer.isBot) return
         val spot = trace.spotOf(index)
         var added: Outcome? = null
         val done = when {
@@ -358,6 +416,7 @@ class GameSession : ViewModel() {
     /** Takes the player at [index] out of the game for good (their darts and score go with them); if it was their turn the next player is up. */
     fun removePlayer(index: Int) {
         val g = game ?: return
+        if (bullOff != null) return
         val name = g.players.getOrNull(index)?.name ?: return
         val wasCurrent = g.currentPlayerIndex == index
         if (!g.removePlayer(index)) return
@@ -372,6 +431,7 @@ class GameSession : ViewModel() {
     /** A hand moved the dart the camera saw at [from] to [to] (board mm): it keeps its place in the turn and takes the score of its new spot, unless the player corrected it. */
     fun dartMoved(from: Point, hit: DartHit, to: Point) {
         val g = game ?: return
+        bullOff?.let { bullOff = it.moved(from.x, from.y, Toss(hit, to.x, to.y)); return }
         val index = (0 until g.turnHits.size).filter { trace.spotOf(it) != null }.minByOrNull { hypot(trace.spotOf(it)!!.x - from.x, trace.spotOf(it)!!.y - from.y) } ?: return
         val spot = trace.spotOf(index)!!
         if (hypot(spot.x - from.x, spot.y - from.y) > 12.0 || g.turnHits[index] != com.opendarts.geometry.BoardGeometry.hitInPicture(spot)) return
@@ -382,6 +442,7 @@ class GameSession : ViewModel() {
     /** The next empty slot [slot] holds a dart that landed behind dart [front]: it scores the same, and the pair is remembered. */
     fun dartBehind(slot: Int, front: Int) {
         val g = game ?: return
+        if (bullOff != null) return
         if (g.currentPlayer.isBot) return
         val hit = g.turnHits.getOrNull(front) ?: return
         if (slot != g.turnHits.size || g.isFinished) return
@@ -397,6 +458,7 @@ class GameSession : ViewModel() {
     /** Called when the camera sees the board cleared: hands over only if the current player actually threw. */
     fun dartsPulled() {
         val g = game ?: return
+        bullOff?.let { if (it.winner != null) bullOffStart(forget = false); return }
         if (!g.isFinished && g.turnHits.isNotEmpty()) nextPlayer()
     }
 }

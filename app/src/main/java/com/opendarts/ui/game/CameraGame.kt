@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.LaunchedEffect
+import com.opendarts.ui.setup.BullOffPanel
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -152,8 +154,16 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
             zoom = zoom, zoomRange = zoomRange, onZoomRange = { low, high -> zoomRange = low..high }, onZoom = chooseZoom, modifier = modifier,
         )
     }
+    val bull = session.bullOff
+    LaunchedEffect(bull?.next, bull?.round, bull?.tosses?.size) {
+        if (bull != null && bull.next != null && bull.next == bull.bot) {
+            kotlinx.coroutines.delay(1000)
+            session.bullOffBot()
+        }
+    }
     val panel: @Composable (Boolean) -> Unit = { fill ->
-        Column(if (fill) Modifier.fillMaxHeight() else Modifier) {
+        if (bull != null) BullOffPanel(session, if (fill) Modifier.fillMaxHeight().verticalScroll(rememberScrollState()) else Modifier)
+        else Column(if (fill) Modifier.fillMaxHeight() else Modifier) {
             CurrentCard(game, if (fill) Modifier.weight(1f) else Modifier, fill = fill, onSlot = { editing = it })
             Spacer(Modifier.height(6.dp))
             PlayerTabs(game)
