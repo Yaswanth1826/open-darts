@@ -23,6 +23,11 @@ class PlayerStore(context: Context) {
         return Roster(names, selected ?: Roster.default().selected)
     }
 
+    /** Whether a new game with two or more players opens with a bull-off to decide who throws first. */
+    var bullOff: Boolean
+        get() = prefs.getBoolean("bulloff", true)
+        set(value) { prefs.edit().putBoolean("bulloff", value).apply() }
+
     fun save(roster: Roster) {
         prefs.edit()
             .putString("roster", roster.names.joinToString("\n") { it.trim().replace('\n', ' ') })

@@ -3,6 +3,8 @@
 package com.opendarts.ui.setup
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -54,6 +56,7 @@ import com.opendarts.billing.FREE_CAMERA_GAMES
 import com.opendarts.session.HistoryStore
 import com.opendarts.session.InputMode
 import com.opendarts.session.canHaveBot
+import com.opendarts.session.hasBullOff
 import com.opendarts.session.x01Average
 import com.opendarts.session.PlayerStore
 import com.opendarts.session.category
@@ -84,6 +87,8 @@ fun NewGameScreen(session: GameSession, onStart: () -> Unit, onBack: () -> Unit)
     val store = remember { PlayerStore(context) }
     var roster by remember { mutableStateOf(store.load()) }
     var editing by remember { mutableStateOf<Int?>(null) }
+    var bullOffOn by remember { mutableStateOf(store.bullOff) }
+    var bullOff by remember { mutableStateOf<GameSetup?>(null) }
     val setup = session.draft
     val botLevel = if (setup.kind.canHaveBot) setup.botLevel else 0
     val ready = roster.selected.size + (if (botLevel > 0) 1 else 0) >= setup.kind.minPlayers
@@ -94,14 +99,24 @@ fun NewGameScreen(session: GameSession, onStart: () -> Unit, onBack: () -> Unit)
 
     fun update(new: Roster) { roster = new; store.save(new) }
     fun toggle(i: Int) = update(roster.copy(selected = if (i in roster.selected) roster.selected - i else roster.selected + i))
+    val count = roster.selected.size + if (botLevel > 0) 1 else 0
     val start = {
         val names = roster.chosenNames + if (botLevel > 0) listOf("Bot " + DartBot.levelName(botLevel)) else emptyList()
-        if (session.start(setup.copy(playerNames = names, botLevel = botLevel, drillTargets = drill.targets))) onStart()
+        val ready = setup.copy(playerNames = names, botLevel = botLevel, botSeat = -1, drillTargets = drill.targets)
+        when {
+            !session.preflight(ready) -> {}
+            bullOffOn && setup.kind.hasBullOff && names.size >= 2 -> bullOff = ready
+            session.start(ready) -> onStart()
+        }
     }
-    val count = roster.selected.size + if (botLevel > 0) 1 else 0
     val summary = "${setup.kind.title}${if (setup.kind == GameKind.X01) " ${setup.x01.startingScore}" else ""} \u00B7 $count ${if (count == 1) "player" else "players"}"
 
-    ScreenBox {
+    val pending = bullOff
+    if (pending != null) BullOffScreen(
+        pending.playerNames, pending.botIndex, pending.botLevel,
+        onWinner = { first -> bullOff = null; if (session.start(pending.startingWith(first))) onStart() },
+        onBack = { bullOff = null },
+    ) else ScreenBox {
         Column(Modifier.fillMaxSize()) {
             TopBar("New game", onBack) {
                 if (landscape) PrimaryButton("Start game", start, enabled = ready, height = 44.dp)
@@ -111,6 +126,7 @@ fun NewGameScreen(session: GameSession, onStart: () -> Unit, onBack: () -> Unit)
             val players: @Composable () -> Unit = {
                 PlayersSection(roster, if (botLevel > 0) 0 else setup.kind.minPlayers, onToggle = ::toggle, onEdit = { editing = it })
                 if (setup.kind.canHaveBot) BotSection(botLevel, ownLevel, premium = access?.premium != false) { session.draft = setup.copy(botLevel = it) }
+                if (setup.kind.hasBullOff && count >= 2) BullOffOption(bullOffOn) { bullOffOn = it; store.bullOff = it }
             }
             if (landscape) {
                 Row(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -293,6 +309,22 @@ private fun PlayersSection(roster: Roster, minPlayers: Int, onToggle: (Int) -> U
     }
 }
 
+@Composable
+private fun BullOffOption(on: Boolean, onChange: (Boolean) -> Unit) {
+    Group("First throw") {
+        Row(Modifier.fillMaxWidth().panel(18.dp).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Bull-off", color = Pal.Text, fontFamily = Display, fontSize = 17.sp)
+                Text("Everyone throws at the bull before the game; the closest throws first.", color = Pal.Muted, fontFamily = Body, fontSize = 13.sp)
+            }
+            Switch(
+                checked = on, onCheckedChange = onChange,
+                colors = SwitchDefaults.colors(checkedTrackColor = Pal.Lime, checkedThumbColor = Pal.OnLime, uncheckedTrackColor = Pal.Raised, uncheckedThumbColor = Pal.Muted, uncheckedBorderColor = Pal.Line),
+            )
+        }
+    }
+}
+
 /** Picks a computer opponent: none, one of the levels, or one that plays like the first player has been playing. */
 @Composable
 private fun BotSection(level: Int, ownLevel: Int?, premium: Boolean, onPick: (Int) -> Unit) {
@@ -303,7 +335,7 @@ private fun BotSection(level: Int, ownLevel: Int?, premium: Boolean, onPick: (In
             if (ownLevel != null && DartBot.LEVELS.none { it.average == ownLevel }) OptionChip("Like you \u00B7 $ownLevel", level == ownLevel, { onPick(ownLevel) })
         }
         Text(
-            if (premium) "The number is its three-dart average. It throws after you, and you can play on the camera or the keypad."
+            if (premium) "The number is its three-dart average. It throws after you unless it wins the bull-off, and you can play on the camera or the keypad."
             else "Premium: play against the bot at six levels. The number is its three-dart average.",
             color = Pal.Muted, fontFamily = Body, fontSize = 14.sp,
         )

@@ -59,6 +59,9 @@ val GameKind.category: Category
         GameKind.SHANGHAI, GameKind.BASEBALL, GameKind.HALVE_IT, GameKind.KILLER -> Category.PARTY
     }
 
+/** Games where who throws first matters, so a bull-off is offered. */
+val GameKind.hasBullOff: Boolean get() = category != Category.PRACTICE
+
 val Category.kinds: List<GameKind> get() = GameKind.entries.filter { it.category == this }
 
 data class GameSetup(
@@ -75,13 +78,28 @@ data class GameSetup(
     /** Source of everything random in a game (checkout numbers, Killer numbers), kept so a saved game replays the same. */
     val seed: Int = 0,
     val input: InputMode = InputMode.CAMERA,
-    /** 0 for no computer opponent; otherwise its X01 average. The bot is always the last player. */
+    /** 0 for no computer opponent; otherwise its X01 average. */
     val botLevel: Int = 0,
+    /** Which player is the bot; -1 means the last one, which is where the setup screen puts it. */
+    val botSeat: Int = -1,
     /** The doubles of the Weak spots drill (25 is the bull), chosen when the game is set up. */
     val drillTargets: List<Int> = DrillPlan.FALLBACK.take(DrillPlan.SIZE),
 ) {
+    /** Index of the bot in [playerNames], or -1 when there is none. */
+    val botIndex: Int get() = if (botLevel > 0) (if (botSeat >= 0) botSeat else playerNames.lastIndex) else -1
+
     val players: List<Player>
-        get() = playerNames.mapIndexed { i, name -> Player(i, name.trim().ifBlank { "Player ${i + 1}" }, if (i == playerNames.lastIndex) botLevel else 0) }
+        get() = playerNames.mapIndexed { i, name -> Player(i, name.trim().ifBlank { "Player ${i + 1}" }, if (i == botIndex) botLevel else 0) }
+
+    /** The same game with player [first] throwing first and the others following in their order. */
+    fun startingWith(first: Int): GameSetup {
+        val n = playerNames.size
+        if (first <= 0 || first >= n) return this
+        return copy(
+            playerNames = playerNames.drop(first) + playerNames.take(first),
+            botSeat = if (botIndex >= 0) (botIndex - first).mod(n) else -1,
+        )
+    }
 
     fun buildGame(): DartGame<*> = when (kind) {
         GameKind.X01 -> X01Game(players, x01)

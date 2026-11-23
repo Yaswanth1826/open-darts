@@ -176,12 +176,19 @@ class GameSession : ViewModel() {
         return true
     }
 
+    /** Whether [s] may be started, raising the [paywall] when not; uses up nothing, so it can run before a bull-off. */
+    fun preflight(s: GameSetup): Boolean {
+        if (s.botLevel > 0 && entitlements?.access()?.premium == false) { paywallFeature = "the dart bot"; paywall = true; return false }
+        if (s.kind == GameKind.WEAK_SPOTS && entitlements?.access()?.premium == false) { paywallFeature = "weak-spot drills"; paywall = true; return false }
+        paywallFeature = null
+        if (s.input == InputMode.CAMERA && entitlements?.access()?.canUseCamera == false) { paywall = true; return false }
+        return true
+    }
+
     /** Starts a game; returns false (and raises [paywall]) when it needs the camera and the player may not use it. */
     fun start(requested: GameSetup): Boolean {
         val newSetup = requested.copy(seed = Random.nextInt())
-        if (newSetup.botLevel > 0 && entitlements?.access()?.premium == false) { paywallFeature = "the dart bot"; paywall = true; return false }
-        if (newSetup.kind == GameKind.WEAK_SPOTS && entitlements?.access()?.premium == false) { paywallFeature = "weak-spot drills"; paywall = true; return false }
-        paywallFeature = null
+        if (!preflight(newSetup)) return false
         if (newSetup.input == InputMode.CAMERA && !claimCamera(newGame = true)) return false
         cameraCounted = newSetup.input == InputMode.CAMERA
         setup = newSetup

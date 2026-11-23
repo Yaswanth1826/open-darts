@@ -2,6 +2,8 @@ package com.opendarts.ui
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -100,6 +102,26 @@ class HomeScreensTest {
         rule.onNodeWithText("Club \u00B7 60").performScrollTo().performClick()
         rule.waitForIdle()
         shot("new-bot")
+    }
+
+    @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
+    fun aNewGameOpensWithABullOffWhichSetsWhoThrowsFirst() {
+        rule.setContent { OpenDartsTheme { OpenDartsApp() } }
+        rule.waitForIdle()
+        rule.onNodeWithText("X01").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Manual keypad").performScrollTo().performClick()
+        rule.onNodeWithText("Bull-off").performScrollTo()
+        shot("new-bulloff-option")
+        rule.onNodeWithText("Start game").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Player 1: what did your dart hit?").assertExists()
+        rule.onAllNodesWithText("Miss").onLast().performClick(); rule.waitForIdle()
+        rule.onAllNodesWithText("Bull").onLast().performClick(); rule.waitForIdle()
+        rule.onNodeWithText("Player 2 throws first").assertExists()
+        rule.onNodeWithText("Start game").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Player 2 to throw").assertExists()
     }
 
     @Test @Config(qualifiers = "w360dp-h1500dp-port-xxhdpi")
