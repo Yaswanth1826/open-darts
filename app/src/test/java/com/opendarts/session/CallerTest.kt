@@ -37,16 +37,16 @@ class CallerTest {
         visit(s)
         assertEquals(listOf("60"), said)
         s.nextPlayer()
-        assertEquals(listOf("60", "> Bo requires 141"), said)
+        assertEquals(listOf("60", "> You need 141"), said)
         visit(s); s.nextPlayer()
-        assertEquals(listOf("60", "> Bo requires 141", "60", "> Ann requires 81"), said)
+        assertEquals(listOf("60", "> You need 141", "60", "> You need 81"), said)
     }
 
     @Test fun keyingTheNextScoreWithoutPressingNextStillCalls() {
         val (s, said) = session(premium = true, full = true, start = 141)
         visit(s)
         s.throwDart(DartHit.single(20))
-        assertEquals(listOf("60", "> Bo requires 141"), said)
+        assertEquals(listOf("60", "> You need 141"), said)
         assertEquals("Bo", s.game!!.currentPlayer.name)
         assertEquals(1, s.game!!.turnHits.size)
     }
@@ -66,6 +66,6 @@ class CallerTest {
     @Test fun aBuildWithoutAccountsKeepsEveryFeature() {
         val (s, said) = session(premium = null, full = true, start = 141)
         visit(s); s.nextPlayer()
-        assertEquals(listOf("60", "> Bo requires 141"), said)
+        assertEquals(listOf("60", "> You need 141"), said)
     }
 }

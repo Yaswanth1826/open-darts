@@ -24,24 +24,24 @@ class RequirementCallTest {
 
     @Test fun theNextPlayerHearsTheirScoreWhenInRange() {
         val g = game(170)
-        assertEquals("Ann requires 170", VisitCall.requirement(g))
+        assertEquals("You need 170", VisitCall.requirement(g))
         g.throwDart(DartHit.single(20)); g.endTurn()
-        assertEquals("Bo requires 170", VisitCall.requirement(g))
+        assertEquals("You need 170", VisitCall.requirement(g))
     }
 
     @Test fun aScoreNobodyCanCheckOutIsNotCalled() {
         assertNull(VisitCall.requirement(game(169)))
         assertNull(VisitCall.requirement(game(168)))
-        assertEquals("Ann requires 167", VisitCall.requirement(game(167)))
+        assertEquals("You need 167", VisitCall.requirement(game(167)))
     }
 
     @Test fun aBustLeavesTheScoreAsItWas() {
         val g = game(40)
         g.throwDart(DartHit.single(20)); g.throwDart(DartHit.single(20))
         g.endTurn()
-        assertEquals("Bo requires 40", VisitCall.requirement(g))
+        assertEquals("You need 40", VisitCall.requirement(g))
         g.endTurn()
-        assertEquals("Ann requires 40", VisitCall.requirement(g))
+        assertEquals("You need 40", VisitCall.requirement(g))
     }
 
     @Test fun aPlayerNotYetInIsNotTold() {

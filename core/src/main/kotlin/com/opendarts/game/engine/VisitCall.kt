@@ -25,14 +25,14 @@ object VisitCall {
     }
 
     /**
-     * Said as a player steps up: what they need to finish the leg, e.g. "Ann requires 121". Only when they are in the game and
+     * Said as a player steps up: what they need to finish the leg, e.g. "You need 121" (no name: names are often pronounced wrongly by the voice). Only when they are in the game and
      * the score can be finished with three darts; null otherwise (far from a finish, a score nobody can check out, or not X01).
      */
     fun requirement(game: DartGame<*>): String? {
         if (game !is X01Game) return null
         val p = game.gameState.players[game.currentPlayerIndex]
         if (!p.isIn || p.remaining <= 0 || Checkout.suggest(p.remaining, game.config.outMode) == null) return null
-        return "${game.currentPlayer.name} requires ${p.remaining}"
+        return "You need ${p.remaining}"
     }
 
     private const val NO_SCORE = "No score"

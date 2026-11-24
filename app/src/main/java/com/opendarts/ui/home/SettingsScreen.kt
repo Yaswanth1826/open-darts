@@ -92,7 +92,7 @@ fun SettingsScreen(entitlements: RemoteEntitlements, billing: PlayBilling) {
             val premium = entitlements.access().premium
             Row(Modifier.fillMaxWidth().panel(18.dp).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Call what you require", color = if (premium) Pal.Text else Pal.Muted, fontFamily = Display, fontSize = 17.sp)
+                    Text("Call what you need", color = if (premium) Pal.Text else Pal.Muted, fontFamily = Display, fontSize = 17.sp)
                     Text(
                         if (premium) "In X01, as a player steps up within checkout range, the caller says how much they need."
                         else "Premium: in X01, as a player steps up within checkout range, the caller says how much they need.",
