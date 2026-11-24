@@ -758,6 +758,35 @@ class MlDartTrackerTest {
     }
 
     @Test
+    fun aDartPulledBetweenTwoLooksWithNoHandCaughtIsGivenUpAsSoonAsItsPlaceShowsTheChange() {
+        val hit = DartHit(20, Multiplier.TRIPLE)
+        repeat(3) { tracker.process(handAt(null)) }
+        visible = listOf(pixelOf(hit))
+        assertEquals(hit, landed(tracker.process(sceneWithDartAt(pixelOf(hit)))).single().hit)
+        repeat(3) { tracker.process(sceneWithDartAt(pixelOf(hit))) }
+        visible = emptyList()
+        var looksUntilGone = 0
+        var gone = false
+        while (!gone && looksUntilGone < 8) {
+            looksUntilGone++
+            gone = tracker.process(handAt(null)).any { it is TrackerEvent.DartsRemoved && it.remaining == 0 }
+        }
+        assertTrue("took $looksUntilGone looks", gone && looksUntilGone <= 3)
+    }
+
+    @Test
+    fun aDartTheNetworkLosesWhileThePictureAroundItStaysTheSameIsKept() {
+        val hit = DartHit(20, Multiplier.TRIPLE)
+        repeat(3) { tracker.process(handAt(null)) }
+        visible = listOf(pixelOf(hit))
+        tracker.process(sceneWithDartAt(pixelOf(hit)))
+        repeat(3) { tracker.process(sceneWithDartAt(pixelOf(hit))) }
+        visible = emptyList()
+        repeat(MlTrackerConfig().removeAfterMissesNoHand - 1) { assertTrue(tracker.process(sceneWithDartAt(pixelOf(hit))).isEmpty()) }
+        assertEquals(1, tracker.darts)
+    }
+
+    @Test
     fun aDartThatVanishesForGoodWithNoHandIsStillGivenUpEventually() {
         visible = listOf(pixelOf(DartHit(20, Multiplier.SINGLE)))
         repeat(2) { look() }

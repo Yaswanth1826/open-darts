@@ -16,7 +16,10 @@ data class MlTrackerConfig(
     val removeAfterMisses: Int = 3,
     /** When every dart that was known is gone at once (and a hand has been about) the board has been emptied: that is certain much sooner than a single missing dart. */
     val removeAllAfterMisses: Int = 2,
-    /** Nobody pulls a dart without a hand reaching in. A dart that vanishes with no hand about is the network losing it, so it is only given up after this many looks. */
+    /**
+     * Nobody pulls a dart without a hand reaching in. A dart that vanishes with no hand about is the network losing it, so it is only given up after this many looks,
+     * unless the picture around its tip visibly changed when it went (a hand can be too quick to be caught between two looks): then it counts as pulled like any other.
+     */
     val removeAfterMissesNoHand: Int = 16,
     /** A dart that is no longer seen where it was, with no hand about, and a detection this close to it (mm): the tip is read a little differently, it is still the same dart. */
     val driftMm: Double = 16.0,
@@ -60,7 +63,7 @@ class MlDartTracker(
     private val config: MlTrackerConfig = MlTrackerConfig(),
 ) {
     /** An [ignored] mark is still matched, so it is not scored again, but it is not a dart: it takes no place of the three and is never reported. */
-    private class Known(var board: Point, var pixel: Point, var seenAt: Long, var misses: Int = 0, var ignored: Boolean = false, var rematched: Boolean = true)
+    private class Known(var board: Point, var pixel: Point, var seenAt: Long, var misses: Int = 0, var ignored: Boolean = false, var rematched: Boolean = true, var vanished: Boolean = false)
     /** [born] is the look where the dart was first seen, so darts confirmed together are scored in the order they landed. */
     private class Candidate(var board: Point, var pixel: Point, val born: Long, var seen: Int = 1)
 
@@ -180,6 +183,7 @@ class MlDartTracker(
                 dart.misses = 0
                 dart.seenAt = looks
                 dart.rematched = true
+                dart.vanished = false
             } else {
                 if (!handInWay) dart.misses++
                 unseen += dart
@@ -196,11 +200,15 @@ class MlDartTracker(
             dart.misses = 0
             dart.seenAt = looks
             dart.rematched = true
+            dart.vanished = false
         }
 
         val needed = if (handInWay) config.confirmLooksWithHand else config.confirmLooks
         val steady = !handInWay && !settling && graceLooks == 0 && off <= config.trustRawFraction
-        val change = if (steady && unmatched.isNotEmpty()) reference.compare(frame) else null
+        val vanishing = unseen.filter { it.seenAt != looks }
+        val change = if (steady && (unmatched.isNotEmpty() || vanishing.isNotEmpty())) reference.compare(frame) else null
+        // A dart that is not seen and whose tip has visibly left the picture is gone, hand or no hand.
+        if (change != null) for (dart in vanishing) if (change.around(fit.apply(dart.board))) dart.vanished = true
         fun fresh(pixel: Point) = change != null && change.around(pixel)
         val next = ArrayList<Candidate>()
         val confirmed = ArrayList<Candidate>()
@@ -226,7 +234,7 @@ class MlDartTracker(
             val boardEmptied = known.isNotEmpty() && known.all { it.misses > 0 }
             val afterHand = if (boardEmptied) config.removeAllAfterMisses else config.removeAfterMisses
             known.removeAll {
-                val limit = if (lastHandLook > it.seenAt) afterHand else config.removeAfterMissesNoHand
+                val limit = if (lastHandLook > it.seenAt || it.vanished) afterHand else config.removeAfterMissesNoHand
                 (it.misses >= limit).also { gone -> if (gone && !it.ignored) removed++ }
             }
         }
