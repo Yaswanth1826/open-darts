@@ -95,6 +95,8 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     val chooseZoom = { value: Float -> zoom = value.coerceIn(zoomRange.start, zoomRange.endInclusive); CameraZoom.save(context, zoom) }
     var saved by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<Int?>(null) }
+    // The darts came out of the board while a dart was being edited: the turn is passed once the editor is closed, not under the player's hands.
+    var pulledWhileEditing by remember { mutableStateOf(false) }
     val showBoard = outline ?: !status.usingAi
     var guide by remember { mutableStateOf(Guide()) }
     val models = remember { TfliteDartNet.available(context) }
@@ -112,7 +114,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
                     }
                     is TrackerEvent.DartsRemoved -> {
                         while (markers.size > event.remaining && markers.isNotEmpty()) markers.removeAt(markers.lastIndex)
-                        if (event.remaining == 0) { session.cameraDartsRemoved(); session.dartsPulled() }
+                        if (event.remaining == 0) { session.cameraDartsRemoved(); if (editing != null) pulledWhileEditing = true else session.dartsPulled() }
                     }
                 }
             },
@@ -214,6 +216,9 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
         }
     }
     if (tips) SetupTipsDialog { tips = false; CameraGuide.markSeen(context) }
+    LaunchedEffect(editing, pulledWhileEditing) {
+        if (editing == null && pulledWhileEditing) { pulledWhileEditing = false; session.dartsPulled() }
+    }
     editing?.let { slot ->
         DartEditor(
             slot, game.turnHits.getOrNull(slot), front = game.turnHits.take(slot),

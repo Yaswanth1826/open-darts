@@ -452,6 +452,44 @@ class MlDartTrackerTest {
         return ColorFrame(640, 480, rgb)
     }
 
+    private fun sceneWithDartsAt(vararg pixels: Point): ColorFrame {
+        val rgb = ByteArray(640 * 480 * 3)
+        for (pixel in pixels) for (y in pixel.y.toInt() - 12 until pixel.y.toInt() + 12) for (x in pixel.x.toInt() - 12 until pixel.x.toInt() + 12) {
+            val i = (y * 640 + x) * 3
+            rgb[i] = -1; rgb[i + 1] = -1; rgb[i + 2] = -1
+        }
+        return ColorFrame(640, 480, rgb)
+    }
+
+    @Test
+    fun aSecondDartLandingAFewMillimetresFromTheFirstIsScoredEvenWhenTheFirstIsNotSeenThatLook() {
+        val first = DartHit(20, Multiplier.TRIPLE)
+        val firstPixel = pixelOf(first)
+        val secondPixel = boardToPixel.apply(besideInMm(first, 14.0))
+        repeat(3) { tracker.process(handAt(null)) }
+        visible = listOf(firstPixel)
+        assertEquals(1, landed(tracker.process(sceneWithDartsAt(firstPixel))).size)
+        repeat(3) { tracker.process(sceneWithDartsAt(firstPixel)) }
+        visible = listOf(secondPixel)
+        assertEquals(1, landed(tracker.process(sceneWithDartsAt(firstPixel, secondPixel))).size)
+        assertEquals(2, tracker.darts)
+    }
+
+    @Test
+    fun aDartHiddenByOneThatLandedBesideItIsNotTakenAsPulledFromTheChangeAlone() {
+        val first = DartHit(20, Multiplier.TRIPLE)
+        val firstPixel = pixelOf(first)
+        val secondPixel = boardToPixel.apply(besideInMm(first, 25.0))
+        repeat(3) { tracker.process(handAt(null)) }
+        visible = listOf(firstPixel)
+        tracker.process(sceneWithDartsAt(firstPixel))
+        repeat(3) { tracker.process(sceneWithDartsAt(firstPixel)) }
+        visible = listOf(secondPixel)
+        val events = (0 until 6).flatMap { tracker.process(sceneWithDartsAt(firstPixel, secondPixel)) }
+        assertTrue(events.filterIsInstance<TrackerEvent.DartsRemoved>().isEmpty())
+        assertEquals(2, tracker.darts)
+    }
+
     @Test
     fun aDartThatVisiblyChangedThePictureIsScoredFromASingleLook() {
         val hit = DartHit(20, Multiplier.TRIPLE)

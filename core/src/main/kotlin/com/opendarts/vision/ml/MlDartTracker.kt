@@ -48,6 +48,8 @@ data class MlTrackerConfig(
     val adoptLooks: Int = 15,
     /** After the camera moved, a known dart that is not back at its board position is the same dart if one is seen this close (mm) to where it was. */
     val reanchorMm: Double = 60.0,
+    /** A dart that is not seen while another is seen this close to it (mm) may be hidden behind it, so its missing tip is no sign that it was pulled. */
+    val hiddenByMm: Double = 40.0,
 )
 
 /** A dart the tracker knew about, kept so a new tracker (the screen was rebuilt, the phone turned) carries on where the old one stopped. */
@@ -189,11 +191,15 @@ class MlDartTracker(
                 unseen += dart
             }
         }
+        val steady = !handInWay && !settling && graceLooks == 0 && off <= config.trustRawFraction
+        val change = if (steady && (unmatched.isNotEmpty() || unseen.isNotEmpty())) reference.compare(frame) else null
         // No hand has been near a dart that is suddenly read somewhere else a little further off: the same dart, not a new one.
+        // Unless the picture changed there: a dart that has just landed next to it also shows up as a new mark, and it is not the old dart moving.
         if (!handInWay) for (dart in unseen) {
             if (lastHandLook > dart.seenAt) continue
             val near = unmatched.minByOrNull { dist(it.first, dart.board) } ?: continue
             if (dist(near.first, dart.board) > config.driftMm) continue
+            if (change?.around(near.second) == true) continue
             unmatched.remove(near)
             dart.board = near.first
             dart.pixel = near.second
@@ -204,11 +210,13 @@ class MlDartTracker(
         }
 
         val needed = if (handInWay) config.confirmLooksWithHand else config.confirmLooks
-        val steady = !handInWay && !settling && graceLooks == 0 && off <= config.trustRawFraction
-        val vanishing = unseen.filter { it.seenAt != looks }
-        val change = if (steady && (unmatched.isNotEmpty() || vanishing.isNotEmpty())) reference.compare(frame) else null
-        // A dart that is not seen and whose tip has visibly left the picture is gone, hand or no hand.
-        if (change != null) for (dart in vanishing) if (change.around(fit.apply(dart.board))) dart.vanished = true
+        // A dart that is not seen and whose tip has visibly left the picture is gone, hand or no hand. Not when another dart is
+        // right beside it: one that landed there may just be hiding it.
+        for (dart in unseen) {
+            if (dart.seenAt == looks) continue
+            if (seenNow.any { dist(it.first, dart.board) <= config.hiddenByMm }) dart.vanished = false
+            else if (change != null && change.around(fit.apply(dart.board))) dart.vanished = true
+        }
         fun fresh(pixel: Point) = change != null && change.around(pixel)
         val next = ArrayList<Candidate>()
         val confirmed = ArrayList<Candidate>()
