@@ -10,10 +10,16 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -95,10 +101,11 @@ fun checkoutHint(game: DartGame<*>): String? {
 
 /**
  * The darts of the current turn: a chip per dart showing what it hit, empty until it lands. With [onSlot], tapping a thrown
- * dart (or the next empty one) lets the player change, remove or enter its score.
+ * dart (or the next empty one) lets the player change, remove or enter its score. With [onDelete], a thrown dart also has a bin
+ * button on its chip that removes it at once.
  */
 @Composable
-fun DartSlots(game: DartGame<*>, modifier: Modifier = Modifier, onSlot: ((Int) -> Unit)? = null) {
+fun DartSlots(game: DartGame<*>, modifier: Modifier = Modifier, onSlot: ((Int) -> Unit)? = null, onDelete: ((Int) -> Unit)? = null) {
     ObserveGame()
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (i in 0 until game.dartsPerTurn) {
@@ -108,10 +115,19 @@ fun DartSlots(game: DartGame<*>, modifier: Modifier = Modifier, onSlot: ((Int) -
             Box(
                 Modifier.weight(1f).height(46.dp).clip(shape).background(if (hit != null) Pal.Lime.copy(alpha = 0.14f) else Pal.Surface)
                     .border(BorderStroke(1.dp, if (hit != null) Pal.Lime else Pal.Line), shape)
-                    .then(if (tappable) Modifier.clickable { onSlot?.invoke(i) } else Modifier),
+                    .then(if (tappable && hit == null) Modifier.clickable { onSlot?.invoke(i) } else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
-                if (hit == null) DartIcon(Pal.Line, width = 40.dp, steel = Pal.Line) else Text(hit.label, color = Pal.Lime, fontFamily = Display, fontSize = 20.sp, maxLines = 1)
+                if (hit == null) DartIcon(Pal.Line, width = 40.dp, steel = Pal.Line) else Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f).fillMaxHeight().then(if (tappable) Modifier.clickable { onSlot?.invoke(i) } else Modifier), contentAlignment = Alignment.Center) {
+                        Text(hit.label, color = Pal.Lime, fontFamily = Display, fontSize = if (onDelete != null) 17.sp else 20.sp, maxLines = 1)
+                    }
+                    if (onDelete != null) {
+                        Box(Modifier.width(36.dp).fillMaxHeight().background(Pal.Coral.copy(alpha = 0.18f)).clickable { onDelete(i) }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Delete, "Delete dart ${i + 1}", tint = Pal.Coral, modifier = Modifier.size(19.dp))
+                        }
+                    }
+                }
             }
         }
     }
@@ -122,7 +138,7 @@ fun DartSlots(game: DartGame<*>, modifier: Modifier = Modifier, onSlot: ((Int) -
  * With [fill] it stretches to the height it is given and scales the number to match; otherwise it only takes the room it needs.
  */
 @Composable
-fun CurrentCard(game: DartGame<*>, modifier: Modifier = Modifier, fill: Boolean = false, onSlot: ((Int) -> Unit)? = null) {
+fun CurrentCard(game: DartGame<*>, modifier: Modifier = Modifier, fill: Boolean = false, onSlot: ((Int) -> Unit)? = null, onDelete: ((Int) -> Unit)? = null, onMenu: (() -> Unit)? = null) {
     ObserveGame()
     val i = game.currentPlayerIndex
     val s = standing(game, i)
@@ -136,6 +152,11 @@ fun CurrentCard(game: DartGame<*>, modifier: Modifier = Modifier, fill: Boolean 
                 Text(game.players[i].name.uppercase(), color = Pal.Text, fontFamily = Display, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 val side = if (s.ppr != null) "AVG ${s.ppr}" else s.caption
                 if (side.isNotEmpty()) Text(side, color = Pal.Muted, fontFamily = Body, fontSize = 13.sp, maxLines = 1)
+                if (onMenu != null) {
+                    Box(Modifier.size(36.dp).clip(CircleShape).background(Pal.Surface).clickable(onClick = onMenu), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.MoreVert, "Menu", tint = Pal.Text)
+                    }
+                }
             }
             Box(Modifier.fillMaxWidth().then(if (fill) Modifier.weight(1f) else Modifier), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -145,15 +166,19 @@ fun CurrentCard(game: DartGame<*>, modifier: Modifier = Modifier, fill: Boolean 
                     checkoutHint(game)?.let { Text("FINISH  $it", color = Pal.Amber, fontFamily = Display, fontSize = 16.sp, maxLines = 1) }
                 }
             }
-            DartSlots(game, onSlot = onSlot)
+            DartSlots(game, onSlot = onSlot, onDelete = onDelete)
         }
     }
 }
 
 /** One chip per player, every player visible: up to four share a row, more wrap onto further rows. The player on the throw is outlined. */
 @Composable
-fun PlayerTabs(game: DartGame<*>, modifier: Modifier = Modifier) {
+fun PlayerTabs(game: DartGame<*>, modifier: Modifier = Modifier, onTap: ((Int) -> Unit)? = null) {
     ObserveGame()
+    val count = game.players.size
+    val next = (game.currentPlayerIndex + 1) % count
+    val previous = (game.currentPlayerIndex + count - 1) % count
+    val back = game.turnHits.isEmpty() && game.canGoBack()
     val perRow = minOf(4, game.players.size)
     val crowded = perRow >= 3
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -163,9 +188,18 @@ fun PlayerTabs(game: DartGame<*>, modifier: Modifier = Modifier) {
                     val active = i == game.currentPlayerIndex && !game.isFinished
                     val s = standing(game, i)
                     val shape = RoundedCornerShape(16.dp)
+                    // Tapping the next player hands the throw over; at the start of a turn the previous player is the way back.
+                    val hint = when {
+                        onTap == null || game.isFinished || i == game.currentPlayerIndex -> null
+                        i == previous && back -> "\u2039 BACK"
+                        i == next && game.turnHits.isNotEmpty() -> "NEXT \u203A"
+                        else -> null
+                    }
                     Column(
                         Modifier.weight(1f).clip(shape).background(if (active) Pal.Raised else Pal.Surface)
-                            .border(BorderStroke(if (active) 1.5.dp else 1.dp, if (active) Pal.Lime else Pal.Line), shape).padding(vertical = 7.dp, horizontal = 6.dp),
+                            .border(BorderStroke(if (active) 1.5.dp else 1.dp, if (active) Pal.Lime else if (hint == "NEXT \u203A") Pal.Lime.copy(alpha = 0.5f) else Pal.Line), shape)
+                            .then(if (onTap != null && !active && !game.isFinished) Modifier.clickable { onTap(i) } else Modifier)
+                            .padding(vertical = 7.dp, horizontal = 6.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
@@ -174,7 +208,8 @@ fun PlayerTabs(game: DartGame<*>, modifier: Modifier = Modifier) {
                         )
                         Text(s.big, color = if (active) Pal.Lime else Pal.Text, fontFamily = Display, fontSize = if (crowded) 22.sp else 28.sp, maxLines = 1)
                         val detail = if (s.ppr != null) "AVG ${s.ppr}" else s.caption
-                        if (!crowded && detail.isNotEmpty()) Text(detail, color = Pal.Muted, fontFamily = Body, fontSize = 12.sp, maxLines = 1)
+                        if (hint != null) Text(hint, color = if (hint.startsWith("NEXT")) Pal.Lime else Pal.Muted, fontFamily = Display, fontSize = 12.sp, maxLines = 1)
+                        else if (!crowded && detail.isNotEmpty()) Text(detail, color = Pal.Muted, fontFamily = Body, fontSize = 12.sp, maxLines = 1)
                     }
                 }
             }

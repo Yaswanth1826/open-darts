@@ -167,6 +167,9 @@ abstract class DartGame<S : Any>(initialPlayers: List<Player>, val dartsPerTurn:
         return true
     }
 
+    /** Whether there is a previous player's turn to go back to. */
+    fun canGoBack(): Boolean = history.any { it.transition }
+
     /**
      * Goes back to the previous player's turn with their darts still in place, so they can be corrected with [editDart].
      * Darts already thrown by the current player this turn are discarded. Returns false at the very start of the game.

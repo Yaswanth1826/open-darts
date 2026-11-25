@@ -125,6 +125,33 @@ class GameScreenTest {
         check(session.game!!.turnHits.isEmpty()) { "dart was not removed" }
     }
 
+    @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
+    fun theBinOnADartChipRemovesItAtOnce() {
+        val session = GameSession().also { it.start(GameSetup(input = InputMode.MANUAL)) }
+        rule.setContent { OpenDartsTheme { GameScreen(session, onExit = {}, onCalibrate = {}) } }
+        rule.runOnIdle { session.throwDart(com.opendarts.game.model.DartHit(20, com.opendarts.game.model.Multiplier.TRIPLE)); session.throwDart(com.opendarts.game.model.DartHit.single(5)) }
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription("Delete dart 1").performClick()
+        rule.waitForIdle()
+        check(session.game!!.turnHits == listOf(com.opendarts.game.model.DartHit.single(5))) { "dart was not deleted: ${session.game!!.turnHits}" }
+    }
+
+    @Test @Config(qualifiers = "w360dp-h780dp-port-xxhdpi")
+    fun tappingThePlayerHandsOverAndTheMenuOpensFromTheCard() {
+        val session = GameSession().also { it.start(GameSetup(playerNames = listOf("Ann", "Bo"), input = InputMode.MANUAL)) }
+        rule.setContent { OpenDartsTheme { GameScreen(session, onExit = {}, onCalibrate = {}) } }
+        rule.runOnIdle { session.throwDart(com.opendarts.game.model.DartHit.single(20)) }
+        rule.waitForIdle()
+        shot("hand-over-hint")
+        rule.onNodeWithText("BO").performClick()
+        rule.waitForIdle()
+        check(session.game!!.currentPlayer.name == "Bo") { "the throw was not handed over" }
+        rule.onNodeWithContentDescription("Menu").performClick()
+        rule.waitForIdle()
+        shot("menu-sheet")
+        for (label in listOf("Scoreboard", "Undo dart", "Camera", "Quit game")) check(rule.onAllNodesWithText(label).fetchSemanticsNodes().isNotEmpty()) { "$label missing in the menu" }
+    }
+
     private fun fourPlayers(input: InputMode, shotName: String) {
         val names = listOf("Player 1", "Player 2", "Player 3", "Player 4")
         val session = GameSession().also { it.start(GameSetup(playerNames = names, input = input)) }

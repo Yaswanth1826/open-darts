@@ -6,11 +6,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,18 +22,17 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -54,14 +53,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opendarts.game.engine.DartGame
@@ -75,7 +72,6 @@ import com.opendarts.session.InputMode
 import com.opendarts.ui.common.Announcer
 import com.opendarts.ui.common.LocalAnnouncer
 import com.opendarts.ui.common.SoundSetting
-import com.opendarts.ui.common.RoundIconButton
 import com.opendarts.ui.theme.Body
 import com.opendarts.ui.theme.Display
 import com.opendarts.ui.theme.Pal
@@ -133,9 +129,10 @@ fun GameScreen(session: GameSession, onExit: () -> Unit, onCalibrate: () -> Unit
     DisposableEffect(session, announcer) {
         session.onDart = { announcer.dart() }
         session.onVisit = announcer::say
+        session.onEffect = announcer::effect
         session.onTurn = announcer::sayNext
         session.fullCaller = SoundSetting.fullCaller(context)
-        onDispose { session.onDart = null; session.onVisit = null; session.onTurn = null; announcer.release() }
+        onDispose { session.onDart = null; session.onVisit = null; session.onEffect = null; session.onTurn = null; announcer.release() }
     }
     val game = session.game ?: return
     BotDriver(session)
@@ -175,13 +172,23 @@ private fun BotDriver(session: GameSession) {
     }
 }
 
-/** A big word over the board for a moment when a visit ends. It never takes touches. */
+/**
+ * A big word over the board for a moment when a visit ends. It never takes touches. A game shot (and a 180) throws confetti,
+ * a bust shakes the word and tints the screen red.
+ */
 @Composable
 private fun CalloutFlash(callout: Callout, onDone: () -> Unit) {
     val pop = remember(callout.id) { Animatable(0.6f) }
+    val shake = remember(callout.id) { Animatable(0f) }
+    val tint = remember(callout.id) { Animatable(if (callout.kind == CalloutKind.BUST) 0.28f else 0f) }
     LaunchedEffect(callout.id) {
         pop.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.5f))
-        kotlinx.coroutines.delay(1500)
+        if (callout.kind == CalloutKind.BUST) {
+            repeat(6) { shake.animateTo(if (it % 2 == 0) 16f else -16f, androidx.compose.animation.core.tween(45)) }
+            shake.animateTo(0f, androidx.compose.animation.core.tween(45))
+            tint.animateTo(0f, androidx.compose.animation.core.tween(600))
+        }
+        kotlinx.coroutines.delay(1200)
         onDone()
     }
     val (color, ink) = when (callout.kind) {
@@ -190,12 +197,42 @@ private fun CalloutFlash(callout: Callout, onDone: () -> Unit) {
         CalloutKind.PLAIN -> Pal.Raised to Pal.Text
     }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        if (tint.value > 0f) Box(Modifier.fillMaxSize().background(Pal.Coral.copy(alpha = tint.value)))
+        if (callout.kind == CalloutKind.GOOD) Confetti(callout.id)
         Text(
             callout.text, color = ink, fontFamily = Display, fontSize = 52.sp, maxLines = 1,
             modifier = Modifier
-                .graphicsLayer { scaleX = pop.value; scaleY = pop.value }
+                .graphicsLayer { scaleX = pop.value; scaleY = pop.value; translationX = shake.value }
                 .clip(RoundedCornerShape(22.dp)).background(color.copy(alpha = 0.96f)).padding(horizontal = 28.dp, vertical = 8.dp),
         )
+    }
+}
+
+private class Piece(val angle: Float, val speed: Float, val spin: Float, val colour: Color, val size: Float)
+
+/** A burst of paper pieces from the middle of the screen that flies out, falls and fades. */
+@Composable
+private fun Confetti(id: Int) {
+    val time = remember(id) { Animatable(0f) }
+    LaunchedEffect(id) { time.animateTo(1f, androidx.compose.animation.core.tween(1700, easing = androidx.compose.animation.core.LinearEasing)) }
+    val pieces = remember(id) {
+        val random = kotlin.random.Random(id)
+        val colours = listOf(Pal.Lime, Pal.Amber, Pal.Sky, Pal.Coral, Color.White)
+        List(54) { Piece(random.nextFloat() * 6.2832f, 0.25f + random.nextFloat() * 0.55f, random.nextFloat() * 720f - 360f, colours[random.nextInt(colours.size)], 0.6f + random.nextFloat() * 0.8f) }
+    }
+    androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+        val t = time.value
+        val out = 1f - (1f - t) * (1f - t)
+        val reach = size.minDimension
+        pieces.forEach { piece ->
+            val x = center.x + kotlin.math.cos(piece.angle) * piece.speed * reach * out
+            val y = center.y + kotlin.math.sin(piece.angle) * piece.speed * reach * out + t * t * reach * 0.35f
+            val alpha = if (t < 0.6f) 1f else ((1f - t) / 0.4f).coerceIn(0f, 1f)
+            val w = 9.dp.toPx() * piece.size
+            rotate(piece.spin * t, androidx.compose.ui.geometry.Offset(x, y)) {
+                drawRect(piece.colour.copy(alpha = alpha), androidx.compose.ui.geometry.Offset(x - w / 2, y - w / 4), androidx.compose.ui.geometry.Size(w, w / 2))
+            }
+        }
     }
 }
 
@@ -224,34 +261,39 @@ private fun MatchStats(rows: List<X01Summary>) {
 private fun ManualGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit) {
     ObserveGame()
     var editing by remember { mutableStateOf<Int?>(null) }
+    var menu by remember { mutableStateOf(false) }
     val landscape = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val keypad: @Composable (Modifier) -> Unit = { modifier ->
         Keypad(
             canUndo = game.canUndo, enabled = !game.isFinished && !game.currentPlayer.isBot,
-            onHit = { session.throwDart(it) }, onUndo = { session.undo() }, onPrevious = { session.previousPlayer() }, onNext = { session.nextPlayer() },
+            onHit = { session.throwDart(it) }, onUndo = { session.undo() },
             modifier = modifier,
         )
     }
+    val card: @Composable (Modifier, Boolean) -> Unit = { modifier, fill ->
+        CurrentCard(game, modifier, fill = fill, onSlot = { editing = it }, onDelete = { session.editDart(it, null) }, onMenu = { menu = true })
+    }
+    val status = "${roundLabel(session, game)}  \u00B7  ${session.message}"
     Column(Modifier.fillMaxSize().background(Pal.Bg).gameInsets()) {
-        GameTopBar(session, game, onExit, onPrevious = null, onNextPlayer = null)
         if (landscape) {
             Row(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 keypad(Modifier.weight(1.3f).fillMaxHeight())
-                Column(Modifier.weight(1f).fillMaxHeight().padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    CurrentCard(game, Modifier.weight(1f), fill = true, onSlot = { editing = it })
-                    MessageLine(session.message)
-                    PlayerTabs(game)
+                Column(Modifier.weight(1f).fillMaxHeight().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    card(Modifier.weight(1f), true)
+                    MessageLine(status)
+                    PlayerTabs(game, onTap = session::selectPlayer)
                 }
             }
         } else {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                CurrentCard(game, onSlot = { editing = it })
-                MessageLine(session.message)
-                PlayerTabs(game)
+            Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                card(Modifier, false)
+                MessageLine(status)
+                PlayerTabs(game, onTap = session::selectPlayer)
             }
             keypad(Modifier.weight(1f))
         }
     }
+    GameMenu(session, game, menu, onClose = { menu = false }, onExit = onExit)
     editing?.let { slot ->
         DartEditor(
             slot, game.turnHits.getOrNull(slot), front = game.turnHits.take(slot),
@@ -260,64 +302,51 @@ private fun ManualGame(session: GameSession, game: DartGame<*>, onExit: () -> Un
     }
 }
 
+/** The game's name, round and leg, e.g. "501  \u00B7  R3  \u00B7  LEG 2". */
+fun roundLabel(session: GameSession, game: DartGame<*>): String {
+    val leg = (game as? X01Game)?.let { if (it.config.legsToWin > 1 || it.config.setsToWin > 1) "  \u00B7  LEG ${it.gameState.legsPlayed + 1}" else "" }.orEmpty()
+    return "${session.setup.title.uppercase()}  \u00B7  R${game.round}$leg"
+}
+
 /**
- * White header: menu, the AI/keypad switch, the round, and (when the camera does the scoring) the Next player button.
- * [extraMenu] lets the camera screen add its own entries.
+ * The menu of a game in play. There is no bar for it: the game screens carry a small menu button on the camera or the score card,
+ * which opens this sheet. It starts with the four things used most (scoreboard, undo, camera or keypad, sound), then [extra] entries
+ * of the screen (the camera tools), then the less common ones and Quit.
  */
 @Composable
-fun GameTopBar(
+fun GameMenu(
     session: GameSession,
     game: DartGame<*>,
+    open: Boolean,
+    onClose: () -> Unit,
     onExit: () -> Unit,
-    onPrevious: (() -> Unit)?,
-    onNextPlayer: (() -> Unit)?,
-    extraMenu: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit = {},
+    extra: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit = {},
 ) {
     ObserveGame()
-    var menu by remember { mutableStateOf(false) }
     var board by remember { mutableStateOf(false) }
     var confirmQuit by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf(false) }
     val camera = session.setup.input == InputMode.CAMERA
     val announcer = LocalAnnouncer.current
-    val configuration = LocalConfiguration.current
-    val wide = configuration.screenWidthDp >= 600
-    val short = configuration.screenHeightDp < 480
-    val side = if (short) 36.dp else 42.dp
-    Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = if (short) 2.dp else 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box {
-            RoundIconButton(onClick = { menu = true }, size = side) { Icon(Icons.Default.MoreVert, "Menu", tint = Pal.Text) }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("Scoreboard") }, onClick = { menu = false; board = true })
-                DropdownMenuItem(text = { Text("Undo last dart") }, enabled = game.canUndo, onClick = { menu = false; session.undo() })
-                extraMenu { menu = false }
-                if (game.players.size > 1 && !game.isFinished) DropdownMenuItem(text = { Text("Remove a player") }, onClick = { menu = false; removing = true })
-                announcer?.let { DropdownMenuItem(text = { Text((if (it.enabled) "\u2713 " else "") + "Sound and spoken score") }, onClick = { menu = false; it.toggle() }) }
-                DropdownMenuItem(text = { Text("Quit game") }, onClick = { menu = false; if (game.canUndo && !game.isFinished) confirmQuit = true else onExit() })
+    if (open) {
+        ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Pal.Surface) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 20.dp)) {
+                Text(roundLabel(session, game), color = Pal.Muted, fontFamily = Display, fontSize = 14.sp, modifier = Modifier.padding(start = 24.dp, bottom = 10.dp))
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MenuTile(Icons.AutoMirrored.Filled.List, "Scoreboard", Modifier.weight(1f)) { onClose(); board = true }
+                    MenuTile(Icons.AutoMirrored.Filled.Undo, "Undo dart", Modifier.weight(1f), enabled = game.canUndo) { onClose(); session.undo() }
+                    MenuTile(if (camera) Icons.Default.Keyboard else Icons.Default.CameraAlt, if (camera) "Keypad" else "Camera", Modifier.weight(1f)) {
+                        onClose(); session.switchInput(if (camera) InputMode.MANUAL else InputMode.CAMERA)
+                    }
+                    if (announcer != null) {
+                        MenuTile(if (announcer.enabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff, if (announcer.enabled) "Sound on" else "Sound off", Modifier.weight(1f)) { announcer.toggle() }
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                extra(onClose)
+                if (game.players.size > 1 && !game.isFinished) MenuItem("Remove a player") { onClose(); removing = true }
+                MenuItem("Quit game", ink = Pal.Coral) { onClose(); if (game.canUndo && !game.isFinished) confirmQuit = true else onExit() }
             }
-        }
-        Box(
-            Modifier.size(side).clip(CircleShape).background(if (camera) Pal.Lime else Pal.Raised).clickable { session.switchInput(if (camera) InputMode.MANUAL else InputMode.CAMERA) },
-            contentAlignment = Alignment.Center,
-        ) { Icon(if (camera) Icons.Default.CameraAlt else Icons.Default.Keyboard, if (camera) "Switch to keypad" else "Switch to camera", tint = if (camera) Pal.OnLime else Pal.Muted) }
-        val leg = (game as? X01Game)?.let { if (it.config.legsToWin > 1 || it.config.setsToWin > 1) ", LEG ${it.gameState.legsPlayed + 1}" else "" }.orEmpty()
-        BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            // With the player buttons on the right there may be no room left: the title then lives on the camera instead.
-            if (maxWidth >= 96.dp) {
-                Text(
-                    buildAnnotatedString {
-                        withStyle(SpanStyle(color = Pal.Text, fontSize = if (onNextPlayer != null) (if (wide) 22.sp else 18.sp) else if (short) 22.sp else 26.sp)) { append(session.setup.title.uppercase()) }
-                        if (onNextPlayer == null) withStyle(SpanStyle(color = Pal.Muted, fontSize = 15.sp)) { append("  R${game.round}$leg") }
-                    },
-                    fontFamily = Display, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        if (onNextPlayer != null) {
-            if (onPrevious != null) PlayerButton(if (wide) "\u2039 PREV PLAYER" else "\u2039 PREV", onPrevious, height = side, compact = !wide)
-            PlayerButton(if (wide) "NEXT PLAYER \u203A" else "NEXT \u203A", onNextPlayer, enabled = !game.isFinished, height = side, compact = !wide, primary = true)
-        } else {
-            RoundIconButton(onClick = { board = true }, size = side) { Icon(Icons.AutoMirrored.Filled.List, "Scoreboard", tint = Pal.Text) }
         }
     }
     if (removing) {
@@ -350,23 +379,35 @@ fun GameTopBar(
                 ObserveGame()
                 Text(session.setup.kind.title.uppercase() + "  " + session.setup.subtitle, style = androidx.compose.material3.MaterialTheme.typography.labelLarge)
                 Scoreboard(game)
-                androidx.compose.foundation.layout.Spacer(Modifier.size(24.dp))
+                Spacer(Modifier.size(24.dp))
             }
         }
     }
 }
 
 @Composable
-private fun PlayerButton(label: String, onClick: () -> Unit, enabled: Boolean = true, height: androidx.compose.ui.unit.Dp = 46.dp, compact: Boolean = false, primary: Boolean = false) {
-    Box(
-        Modifier.height(height).clip(RoundedCornerShape(14.dp)).background(if (primary && enabled) Pal.Lime else Pal.Raised).clickable(enabled = enabled, onClick = onClick).padding(horizontal = if (compact) 10.dp else 14.dp),
-        contentAlignment = Alignment.Center,
+private fun MenuTile(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    val ink = Pal.Text.copy(alpha = if (enabled) 1f else 0.35f)
+    Column(
+        modifier.clip(shape).background(Pal.Raised).clickable(enabled = enabled, onClick = onClick).padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(label, color = (if (primary) Pal.OnLime else Pal.Text).copy(alpha = if (enabled) 1f else 0.4f), fontFamily = Display, fontSize = if (compact) 14.sp else 16.sp, maxLines = 1, softWrap = false)
+        Icon(icon, null, tint = ink)
+        Text(label, color = ink, fontFamily = Display, fontSize = 13.sp, maxLines = 1)
     }
+}
+
+/** One plain entry in the game menu. */
+@Composable
+fun MenuItem(text: String, enabled: Boolean = true, ink: Color = Pal.Text, onClick: () -> Unit) {
+    Text(
+        text, color = ink.copy(alpha = if (enabled) 1f else 0.4f), fontFamily = Body, fontSize = 16.sp,
+        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick).padding(horizontal = 24.dp, vertical = 14.dp),
+    )
 }
 
 @Composable
 private fun MessageLine(text: String) {
-    Text(text, color = Pal.Muted, fontFamily = Body, fontSize = 13.sp, maxLines = 1, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    Text(text, color = Pal.Muted, fontFamily = Body, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
 }

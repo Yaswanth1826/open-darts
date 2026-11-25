@@ -22,9 +22,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -95,6 +95,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     val chooseZoom = { value: Float -> zoom = value.coerceIn(zoomRange.start, zoomRange.endInclusive); CameraZoom.save(context, zoom) }
     var saved by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<Int?>(null) }
+    var menu by remember { mutableStateOf(false) }
     // The darts came out of the board while a dart was being edited: the turn is passed once the editor is closed, not under the player's hands.
     var pulledWhileEditing by remember { mutableStateOf(false) }
     val showBoard = outline ?: !status.usingAi
@@ -147,12 +148,12 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
     }
 
     val landscape = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    val round = "${session.setup.title.uppercase()}  \u00B7  R${game.round}" + ((game as? X01Game)?.let { if (it.config.legsToWin > 1 || it.config.setsToWin > 1) " \u00B7 LEG ${it.gameState.legsPlayed + 1}" else "" }.orEmpty()) + (aimHint(game)?.takeIf { it.length <= 16 }?.let { " \u00B7 " + it.replace("  ", " ") }.orEmpty())
+    val round = roundLabel(session, game) + (aimHint(game)?.takeIf { it.length <= 16 }?.let { " \u00B7 " + it.replace("  ", " ") }.orEmpty())
     val cameraBox: @Composable (Modifier) -> Unit = { modifier ->
         CameraArea(
             camera, status, markers, aligning, guide, { guide = it }, showBoard, round, session.message, game.isFinished,
             onAlign = { aligning = true }, onLock = { camera.useGuide(guide); aligning = false }, onCancelAlign = { aligning = false },
-            onCalibrate = onCalibrate, onTips = { tips = true }, onUndo = { session.undo() }, canUndo = game.canUndo,
+            onCalibrate = onCalibrate, onTips = { tips = true }, onUndo = { session.undo() }, canUndo = game.canUndo, onMenu = { menu = true },
             zoom = zoom, zoomRange = zoomRange, onZoomRange = { low, high -> zoomRange = low..high }, onZoom = chooseZoom, modifier = modifier,
         )
     }
@@ -163,57 +164,62 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
             session.bullOffBot()
         }
     }
+    val deleteDart = { slot: Int ->
+        val was = game.turnHits.getOrNull(slot)
+        val seenAt = session.spotOf(slot)
+        session.editDart(slot, null)
+        if (was != null) camera.saveCorrection(was, null, seenAt)
+    }
     val panel: @Composable (Boolean) -> Unit = { fill ->
         if (bull != null) BullOffPanel(session, if (fill) Modifier.fillMaxHeight().verticalScroll(rememberScrollState()) else Modifier)
         else Column(if (fill) Modifier.fillMaxHeight() else Modifier) {
-            CurrentCard(game, if (fill) Modifier.weight(1f) else Modifier, fill = fill, onSlot = { editing = it })
+            CurrentCard(game, if (fill) Modifier.weight(1f) else Modifier, fill = fill, onSlot = { editing = it }, onDelete = deleteDart)
             Spacer(Modifier.height(6.dp))
-            PlayerTabs(game)
+            PlayerTabs(game, onTap = session::selectPlayer)
         }
     }
 
     Column(Modifier.fillMaxSize().background(Pal.Bg).gameInsets()) {
-        GameTopBar(session, game, onExit, onPrevious = { session.previousPlayer() }, onNextPlayer = { session.nextPlayer() }) { dismiss ->
-            DropdownMenuItem(text = { Text("Rescan board") }, onClick = { dismiss(); camera.findBoardAgain() })
-            DropdownMenuItem(text = { Text("Board is clear \u2013 start now") }, enabled = status.phase == CameraPhase.TRACKING, onClick = { dismiss(); camera.startNow() })
-            DropdownMenuItem(text = { Text("Align board by hand") }, onClick = { dismiss(); aligning = true })
-            DropdownMenuItem(text = { Text("Calibrate with 4 taps") }, onClick = { dismiss(); onCalibrate() })
-            DropdownMenuItem(text = { Text((if (showBoard) "\u2713 " else "") + "Show board outline") }, onClick = { dismiss(); outline = !showBoard })
-            DropdownMenuItem(text = { Text("Save this frame for debugging") }, onClick = {
-                dismiss()
-                camera.saveFrame("misread") { name -> saved = if (name.isEmpty()) "Could not save the frame" else "Saved to Pictures/OpenDarts" }
-            })
-            DropdownMenuItem(
-                text = { Text((if (collecting) "\u2713 " else "") + "Save training photos to Gallery" + if (status.collected > 0) " (${status.collected})" else "") },
-                onClick = { dismiss(); collecting = !collecting; camera.collecting = collecting },
-            )
-            if (status.collected > 0) {
-                DropdownMenuItem(text = { Text("Delete training photos") }, onClick = {
-                    dismiss()
-                    camera.deleteCollected { saved = "Training photos deleted" }
-                })
-            }
-            if (models.size > 1) {
-                DropdownMenuItem(text = { Text("Detector: ${TfliteDartNet.label(model)} (tap to switch)") }, onClick = {
-                    dismiss()
-                    if (session.game != null && session.setup.input == InputMode.CAMERA) session.cameraMemory = camera.remembered()
-                    val next = models[(models.indexOf(model) + 1) % models.size]
-                    TfliteDartNet.choose(context, next)
-                    model = next
-                    saved = "Detector: ${TfliteDartNet.label(next)}"
-                })
-            }
-            DropdownMenuItem(text = { Text("Setup tips") }, onClick = { dismiss(); tips = true })
-        }
         if (landscape) {
             Row(Modifier.weight(1f).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 cameraBox(Modifier.weight(1.15f).fillMaxHeight())
                 Box(Modifier.weight(1f).fillMaxHeight()) { panel(true) }
             }
         } else {
-            cameraBox(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp))
+            cameraBox(Modifier.weight(1f).fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 6.dp))
             Box(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) { panel(false) }
         }
+    }
+    GameMenu(session, game, menu, onClose = { menu = false }, onExit = onExit) { dismiss ->
+        MenuItem("Rescan board") { dismiss(); camera.findBoardAgain() }
+        MenuItem("Board is clear \u2013 start now", enabled = status.phase == CameraPhase.TRACKING) { dismiss(); camera.startNow() }
+        MenuItem("Align board by hand") { dismiss(); aligning = true }
+        MenuItem("Calibrate with 4 taps") { dismiss(); onCalibrate() }
+        MenuItem((if (showBoard) "\u2713 " else "") + "Show board outline") { dismiss(); outline = !showBoard }
+        MenuItem("Save this frame for debugging") {
+            dismiss()
+            camera.saveFrame("misread") { name -> saved = if (name.isEmpty()) "Could not save the frame" else "Saved to Pictures/OpenDarts" }
+        }
+        MenuItem((if (collecting) "\u2713 " else "") + "Save training photos to Gallery" + if (status.collected > 0) " (${status.collected})" else "") {
+            dismiss(); collecting = !collecting; camera.collecting = collecting
+        }
+        if (status.collected > 0) {
+            MenuItem("Delete training photos") {
+                dismiss()
+                camera.deleteCollected { saved = "Training photos deleted" }
+            }
+        }
+        if (models.size > 1) {
+            MenuItem("Detector: ${TfliteDartNet.label(model)} (tap to switch)") {
+                dismiss()
+                if (session.game != null && session.setup.input == InputMode.CAMERA) session.cameraMemory = camera.remembered()
+                val next = models[(models.indexOf(model) + 1) % models.size]
+                TfliteDartNet.choose(context, next)
+                model = next
+                saved = "Detector: ${TfliteDartNet.label(next)}"
+            }
+        }
+        MenuItem("Setup tips") { dismiss(); tips = true }
     }
     if (tips) SetupTipsDialog { tips = false; CameraGuide.markSeen(context) }
     LaunchedEffect(editing, pulledWhileEditing) {
@@ -244,7 +250,7 @@ private fun CameraArea(
     camera: ScoringCamera, status: CameraStatus, markers: List<Point>, aligning: Boolean, guide: Guide, onGuide: (Guide) -> Unit,
     showBoard: Boolean, round: String, message: String, finished: Boolean,
     onAlign: () -> Unit, onLock: () -> Unit, onCancelAlign: () -> Unit, onCalibrate: () -> Unit, onTips: () -> Unit,
-    onUndo: () -> Unit, canUndo: Boolean,
+    onUndo: () -> Unit, canUndo: Boolean, onMenu: () -> Unit,
     zoom: Float, zoomRange: ClosedFloatingPointRange<Float>, onZoomRange: (Float, Float) -> Unit, onZoom: (Float) -> Unit,
     modifier: Modifier,
 ) {
@@ -277,6 +283,7 @@ private fun CameraArea(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OverlayButton(enabled = canUndo, onClick = onUndo) { Icon(Icons.AutoMirrored.Filled.Undo, "Undo", tint = Color.White) }
                         OverlayButton(onClick = { camera.findBoardAgain() }) { Icon(Icons.Default.Refresh, "Rescan", tint = Color.White) }
+                        OverlayButton(onClick = onMenu) { Icon(Icons.Default.MoreVert, "Menu", tint = Color.White) }
                     }
                 }
             }

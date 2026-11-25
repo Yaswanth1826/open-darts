@@ -1,13 +1,18 @@
 package com.opendarts.ui.common
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFormat
 import android.media.AudioManager
+import android.media.AudioTrack
 import android.media.ToneGenerator
 import android.speech.tts.TextToSpeech
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import com.opendarts.session.SoundEffect
+import java.util.concurrent.Executors
 import java.util.Locale
 
 /** How fast the caller talks. */
@@ -40,6 +45,28 @@ class Announcer(context: Context) {
         if (enabled) runCatching { tone?.startTone(ToneGenerator.TONE_PROP_BEEP, 90) }
     }
 
+    private val effects = Executors.newSingleThreadExecutor { Thread(it, "sound-effects").apply { isDaemon = true } }
+
+    /** The bust and game shot sounds, which are heard instead of being spoken. */
+    fun effect(effect: SoundEffect) {
+        if (!enabled) return
+        runCatching {
+            effects.execute {
+                runCatching {
+                    val pcm = SoundFx.pcm(effect)
+                    val track = AudioTrack.Builder()
+                        .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                        .setAudioFormat(AudioFormat.Builder().setSampleRate(SoundFx.RATE).setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+                        .setTransferMode(AudioTrack.MODE_STATIC).setBufferSizeInBytes(pcm.size * 2).build()
+                    track.write(pcm, 0, pcm.size)
+                    track.play()
+                    Thread.sleep(pcm.size * 1000L / SoundFx.RATE + 150)
+                    track.release()
+                }
+            }
+        }
+    }
+
     fun say(text: String) = speak(text, TextToSpeech.QUEUE_FLUSH)
 
     /** Said after whatever is being spoken, instead of cutting it off. */
@@ -52,6 +79,7 @@ class Announcer(context: Context) {
     fun release() {
         runCatching { speech?.stop(); speech?.shutdown() }
         runCatching { tone?.release() }
+        runCatching { effects.shutdownNow() }
     }
 }
 

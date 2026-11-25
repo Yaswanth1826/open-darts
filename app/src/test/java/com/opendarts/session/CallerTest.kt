@@ -51,6 +51,35 @@ class CallerTest {
         assertEquals(1, s.game!!.turnHits.size)
     }
 
+    @Test fun aBustIsShownWithASoundButNotSpoken() {
+        val (s, said) = session(premium = true, full = true, start = 40)
+        val effects = ArrayList<SoundEffect>()
+        s.onEffect = { effects += it }
+        s.throwDart(DartHit.single(20)); s.throwDart(DartHit.single(20))
+        assertEquals("BUST", s.callout!!.text)
+        assertEquals(listOf(SoundEffect.BUST), effects)
+        assertEquals(emptyList<String>(), said)
+    }
+
+    @Test fun aGameShotIsShownWithASoundButNotSpoken() {
+        val (s, said) = session(premium = true, full = true, start = 40)
+        val effects = ArrayList<SoundEffect>()
+        s.onEffect = { effects += it }
+        s.throwDart(DartHit.single(20)); s.throwDart(DartHit.double(10))
+        assertEquals("GAME SHOT", s.callout!!.text)
+        assertEquals(listOf(SoundEffect.GAME_SHOT), effects)
+        assertEquals(emptyList<String>(), said)
+    }
+
+    @Test fun aScoreIsStillSpokenWithoutAnEffect() {
+        val (s, said) = session(premium = true, full = true)
+        val effects = ArrayList<SoundEffect>()
+        s.onEffect = { effects += it }
+        visit(s)
+        assertEquals(listOf("60"), said)
+        assertEquals(emptyList<SoundEffect>(), effects)
+    }
+
     @Test fun theSettingTurnsItOff() {
         val (s, said) = session(premium = true, full = false, start = 141)
         visit(s); s.nextPlayer()

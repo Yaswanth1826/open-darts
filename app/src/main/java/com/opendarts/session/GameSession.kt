@@ -25,8 +25,15 @@ import kotlin.random.Random
 
 enum class CalloutKind { PLAIN, GOOD, BUST }
 
+/** A short sound played with the flash for the moments that are shown rather than spoken. */
+enum class SoundEffect { BUST, GAME_SHOT }
+
 /** The big word flashed over the board when a visit ends, e.g. BUST, NO SCORE, 60, 180 or GAME SHOT. */
 data class Callout(val player: String, val text: String, val kind: CalloutKind, val id: Int) {
+    /** Bust and game shot are only shown (with a sound effect), never read out; scores and the 180 are spoken. */
+    val spoken: Boolean get() = kind == CalloutKind.PLAIN || text == "180"
+    val effect: SoundEffect? get() = when (text) { "BUST" -> SoundEffect.BUST; "GAME SHOT" -> SoundEffect.GAME_SHOT; else -> null }
+
     companion object {
         fun of(player: String, call: String, id: Int): Callout {
             val kind = when (call) {
@@ -123,6 +130,7 @@ class GameSession : ViewModel() {
     /** Set by the screen while it is showing: a dart was scored (from the camera or the keypad), and what to say when a visit ends. */
     var onDart: ((DartHit) -> Unit)? = null
     var onVisit: ((String) -> Unit)? = null
+    var onEffect: ((SoundEffect) -> Unit)? = null
 
     /** Set by the screen: said after the visit call, as the next player steps up (queued behind it). */
     var onTurn: ((String) -> Unit)? = null
@@ -138,8 +146,10 @@ class GameSession : ViewModel() {
     fun clearCallout(id: Int) { if (callout?.id == id) callout = null }
 
     private fun visitEnded(g: DartGame<*>, call: String) {
-        callout = Callout.of(g.currentPlayer.name, call, ++calloutId)
-        onVisit?.invoke(call)
+        val flash = Callout.of(g.currentPlayer.name, call, ++calloutId)
+        callout = flash
+        if (flash.spoken) onVisit?.invoke(call)
+        flash.effect?.let { onEffect?.invoke(it) }
     }
 
     private fun turnStarted(g: DartGame<*>) {
@@ -359,6 +369,24 @@ class GameSession : ViewModel() {
     fun nextPlayer() {
         if (bullOff != null || game?.currentPlayer?.isBot == true) return
         advance()
+    }
+
+    /**
+     * A tap on a player's tab. The next player takes over the throw (the visit is closed); at the start of a turn the previous player
+     * is the way back to their darts, to correct them. Anyone else cannot be skipped to.
+     */
+    fun selectPlayer(index: Int) {
+        val g = game ?: return
+        if (bullOff != null || g.isFinished || g.currentPlayer.isBot || index == g.currentPlayerIndex || index !in g.players.indices) return
+        val count = g.players.size
+        val previous = (g.currentPlayerIndex + count - 1) % count
+        val next = (g.currentPlayerIndex + 1) % count
+        when {
+            index == previous && g.turnHits.isEmpty() && g.canGoBack() -> previousPlayer()
+            index == next -> advance()
+            index == previous -> message = "Tap ${g.players[next].name} to hand over the throw"
+            else -> message = "Tap ${g.players[next].name} to hand over, players cannot be skipped"
+        }
     }
 
     /** One step of the computer opponent: it throws its next dart, or hands over once its visit is over. */

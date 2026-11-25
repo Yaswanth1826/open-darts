@@ -38,10 +38,10 @@ import com.opendarts.ui.theme.Pal
 
 /**
  * Tap-to-score pad. Pick Single, Double or Treble, then the number: the pad goes back to Single after every dart.
- * Miss and the bulls sit under the numbers, with undo and the player buttons at the bottom.
+ * Miss and the bulls sit under the numbers, with undo at the bottom (the throw is handed over by tapping the next player).
  */
 @Composable
-fun Keypad(canUndo: Boolean, enabled: Boolean, onHit: (DartHit) -> Unit, onUndo: () -> Unit, onPrevious: () -> Unit, onNext: () -> Unit, modifier: Modifier = Modifier) {
+fun Keypad(canUndo: Boolean, enabled: Boolean, onHit: (DartHit) -> Unit, onUndo: () -> Unit, modifier: Modifier = Modifier) {
     var multiplier by remember { mutableStateOf(Multiplier.SINGLE) }
     val throwDart: (DartHit) -> Unit = { onHit(it); multiplier = Multiplier.SINGLE }
     BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
@@ -67,12 +67,14 @@ fun Keypad(canUndo: Boolean, enabled: Boolean, onHit: (DartHit) -> Unit, onUndo:
                 Key("BULL", Pal.Surface, Pal.Coral, fit * 0.8f, enabled, border = true) { throwDart(DartHit.INNER_BULL) }
             }
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(
-                    Modifier.weight(0.7f).fillMaxSize().clip(RoundedCornerShape(14.dp)).background(Pal.Surface).border(BorderStroke(1.dp, Pal.Line), RoundedCornerShape(14.dp)).clickable(enabled = canUndo, onClick = onUndo),
-                    contentAlignment = Alignment.Center,
-                ) { Icon(Icons.AutoMirrored.Filled.Undo, "Undo", tint = Pal.Text.copy(alpha = if (canUndo) 1f else 0.3f)) }
-                Key("\u2039 Prev", Pal.Surface, Pal.Text, fit * 0.8f, true, weight = 1f, border = true, onClick = onPrevious)
-                Key("Next \u203A", Pal.Lime, Pal.OnLime, fit * 0.9f, enabled, weight = 1.5f, onClick = onNext)
+                Row(
+                    Modifier.weight(1f).fillMaxSize().clip(RoundedCornerShape(14.dp)).background(Pal.Surface).border(BorderStroke(1.dp, Pal.Line), RoundedCornerShape(14.dp)).clickable(enabled = canUndo, onClick = onUndo),
+                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val ink = Pal.Text.copy(alpha = if (canUndo) 1f else 0.3f)
+                    Icon(Icons.AutoMirrored.Filled.Undo, null, tint = ink)
+                    Text("  UNDO DART", color = ink, fontFamily = Display, fontSize = (fit * 0.8f).sp, maxLines = 1)
+                }
             }
         }
     }

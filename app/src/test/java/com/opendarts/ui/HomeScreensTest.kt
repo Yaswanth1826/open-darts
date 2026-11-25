@@ -121,7 +121,7 @@ class HomeScreensTest {
         rule.onNodeWithText("Player 2 throws first").assertExists()
         rule.onNodeWithText("Start game").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("Player 2 to throw").assertExists()
+        rule.onNodeWithText("Player 2 to throw", substring = true).assertExists()
     }
 
     @Test @Config(qualifiers = "w360dp-h1500dp-port-xxhdpi")
