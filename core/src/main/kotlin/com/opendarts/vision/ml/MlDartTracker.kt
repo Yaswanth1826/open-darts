@@ -178,18 +178,22 @@ class MlDartTracker(
 
         var removed = 0
         val unseen = ArrayList<Known>()
-        for (dart in known.toList()) {
-            val near = unmatched.minByOrNull { dist(it.first, dart.board) }
-            if (near != null && dist(near.first, dart.board) <= config.sameDartMm) {
-                unmatched.remove(near)
-                dart.misses = 0
-                dart.seenAt = looks
-                dart.rematched = true
-                dart.vanished = false
-            } else {
-                if (!handInWay) dart.misses++
-                unseen += dart
-            }
+        // The closest pairs are matched first. Going dart by dart would let a dart take the reading of its neighbour a few mm away,
+        // and when that first dart is pulled its mark would live on in the neighbour's reading while the neighbour itself was dropped.
+        val pairs = known.flatMap { dart -> unmatched.map { Triple(dart, it, dist(it.first, dart.board)) } }.filter { it.third <= config.sameDartMm }.sortedBy { it.third }
+        val taken = HashSet<Known>()
+        for ((dart, reading, _) in pairs) {
+            if (dart in taken || reading !in unmatched) continue
+            taken += dart
+            unmatched.remove(reading)
+            dart.misses = 0
+            dart.seenAt = looks
+            dart.rematched = true
+            dart.vanished = false
+        }
+        for (dart in known.toList()) if (dart !in taken) {
+            if (!handInWay) dart.misses++
+            unseen += dart
         }
         val steady = !handInWay && !settling && graceLooks == 0 && off <= config.trustRawFraction
         val change = if (steady && (unmatched.isNotEmpty() || unseen.isNotEmpty())) reference.compare(frame) else null

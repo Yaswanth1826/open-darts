@@ -462,6 +462,69 @@ class MlDartTrackerTest {
     }
 
     @Test
+    fun pullingOneOfTwoDartsSixMillimetresApartKeepsTheOneThatIsStillThere() {
+        val a = DartHit(20, Multiplier.TRIPLE)
+        val aPixel = pixelOf(a)
+        val bPixel = boardToPixel.apply(besideInMm(a, 6.0))
+        visible = listOf(aPixel, bPixel)
+        repeat(3) { look() }
+        assertEquals(2, tracker.darts)
+        visible = listOf(bPixel)
+        handPass()
+        val events = (0 until 6).flatMap { look() }
+        assertEquals(1, tracker.darts)
+        assertEquals(listOf(TrackerEvent.DartsRemoved(1)), events.filterIsInstance<TrackerEvent.DartsRemoved>())
+        val left = tracker.dartPixels.single()
+        assertTrue("the mark stayed on the dart that was pulled", Math.hypot(left.x - bPixel.x, left.y - bPixel.y) < Math.hypot(left.x - aPixel.x, left.y - aPixel.y))
+    }
+
+    @Test
+    fun threeDartsInARowSixMillimetresApartAreAllScoredAndPulledOneByOneWithTheRightMarksLeft() {
+        val t20 = DartHit(20, Multiplier.TRIPLE)
+        val spots = listOf(0.0, 6.0, 12.0).map { boardToPixel.apply(besideInMm(t20, it)) }
+        val landed = ArrayList<TrackerEvent>()
+        for (n in 1..3) {
+            visible = spots.take(n)
+            repeat(3) { landed += look() }
+        }
+        assertEquals(3, landed.filterIsInstance<TrackerEvent.DartLanded>().size)
+        assertEquals(3, tracker.darts)
+        fun marksAre(vararg expected: Int) {
+            val marks = tracker.dartPixels
+            assertEquals(expected.size, marks.size)
+            for (i in expected) assertTrue("no mark on dart $i", marks.any { Math.hypot(it.x - spots[i].x, it.y - spots[i].y) < 1.0 })
+        }
+        visible = listOf(spots[0], spots[2])
+        handPass(); repeat(6) { look() }
+        marksAre(0, 2)
+        visible = listOf(spots[2])
+        handPass(); repeat(6) { look() }
+        marksAre(2)
+        visible = emptyList()
+        handPass()
+        val events = (0 until 6).flatMap { look() }
+        assertEquals(0, tracker.darts)
+        assertTrue(events.contains(TrackerEvent.DartsRemoved(0)))
+    }
+
+    @Test
+    fun pullingTheLastOfTwoCloseDartsAfterTheFirstEmptiesTheBoard() {
+        val a = DartHit(20, Multiplier.TRIPLE)
+        val aPixel = pixelOf(a)
+        val bPixel = boardToPixel.apply(besideInMm(a, 6.0))
+        visible = listOf(aPixel, bPixel)
+        repeat(3) { look() }
+        visible = listOf(bPixel)
+        handPass()
+        repeat(6) { look() }
+        visible = emptyList()
+        handPass()
+        val events = (0 until 6).flatMap { look() }
+        assertEquals(0, tracker.darts)
+        assertTrue(events.contains(TrackerEvent.DartsRemoved(0)))
+    }
+
+    @Test
     fun aSecondDartLandingAFewMillimetresFromTheFirstIsScoredEvenWhenTheFirstIsNotSeenThatLook() {
         val first = DartHit(20, Multiplier.TRIPLE)
         val firstPixel = pixelOf(first)
