@@ -21,9 +21,7 @@ import com.opendarts.ui.setup.BullOffPanel
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
@@ -153,7 +151,7 @@ fun CameraGame(session: GameSession, game: DartGame<*>, onExit: () -> Unit, onCa
         CameraArea(
             camera, status, markers, aligning, guide, { guide = it }, showBoard, round, session.message, game.isFinished,
             onAlign = { aligning = true }, onLock = { camera.useGuide(guide); aligning = false }, onCancelAlign = { aligning = false },
-            onCalibrate = onCalibrate, onTips = { tips = true }, onUndo = { session.undo() }, canUndo = game.canUndo, onMenu = { menu = true },
+            onCalibrate = onCalibrate, onTips = { tips = true }, onMenu = { menu = true },
             zoom = zoom, zoomRange = zoomRange, onZoomRange = { low, high -> zoomRange = low..high }, onZoom = chooseZoom, modifier = modifier,
         )
     }
@@ -250,7 +248,7 @@ private fun CameraArea(
     camera: ScoringCamera, status: CameraStatus, markers: List<Point>, aligning: Boolean, guide: Guide, onGuide: (Guide) -> Unit,
     showBoard: Boolean, round: String, message: String, finished: Boolean,
     onAlign: () -> Unit, onLock: () -> Unit, onCancelAlign: () -> Unit, onCalibrate: () -> Unit, onTips: () -> Unit,
-    onUndo: () -> Unit, canUndo: Boolean, onMenu: () -> Unit,
+    onMenu: () -> Unit,
     zoom: Float, zoomRange: ClosedFloatingPointRange<Float>, onZoomRange: (Float, Float) -> Unit, onZoom: (Float) -> Unit,
     modifier: Modifier,
 ) {
@@ -281,8 +279,6 @@ private fun CameraArea(
                     }
                     Box(Modifier.weight(0.01f))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OverlayButton(enabled = canUndo, onClick = onUndo) { Icon(Icons.AutoMirrored.Filled.Undo, "Undo", tint = Color.White) }
-                        OverlayButton(onClick = { camera.findBoardAgain() }) { Icon(Icons.Default.Refresh, "Rescan", tint = Color.White) }
                         OverlayButton(onClick = onMenu) { Icon(Icons.Default.MoreVert, "Menu", tint = Color.White) }
                     }
                 }
