@@ -31,11 +31,14 @@ data class MlTrackerConfig(
     /** Corner positions are blended with the previous ones unless they jump by more than this share of the frame diagonal. */
     val smoothing: Double = 0.4,
     val jumpFraction: Double = 0.04,
-    val jumpLooksToReset: Int = 4,
+    val jumpLooksToReset: Int = 2,
     /** When the board cannot be found (a hand in front of it, a blurred frame) the last fit is kept for this many looks. */
     val holdLooks: Int = 16,
-    /** After the camera moved, darts cannot be taken as pulled out for this many looks (they are matched again at their board positions first). */
-    val graceLooks: Int = 8,
+    /**
+     * After the camera (or the mat under the board) moved, darts cannot be taken as pulled out for this many looks (they are matched again at their board
+     * positions first). Darts sit in the board and move with it, so their board positions do not change: the new fit can be trusted quickly.
+     */
+    val graceLooks: Int = 3,
     /** While the picture is catching up with a small camera shift, darts are placed with the exact corners of the look when they differ by more than this share of the frame diagonal. */
     val trustRawFraction: Double = 0.008,
     /** A look where more than this share of the picture changed since the last one has a hand or arm in it (a landing dart changes far less). */
@@ -73,6 +76,7 @@ class MlDartTracker(
     private var candidates = ArrayList<Candidate>()
     private var corners: List<Point>? = null
     private var jumps = 0
+    private var jumpCorners: List<Point>? = null
     private var lost = 0
     private var settling = false
     private var graceLooks = 0
@@ -318,7 +322,12 @@ class MlDartTracker(
             if (jump > config.jumpFraction) {
                 settling = true
                 reference.clear()
-                if (++jumps >= config.jumpLooksToReset) {
+                // A new position counts once looks agree on it: a hand over a corner or a blurred frame reads differently every time.
+                val agreed = jumpCorners?.let { last -> cal.indices.maxOf { dist(cal[it], last[it]) } / diagonal <= config.jumpFraction / 2 } ?: false
+                jumpCorners = cal
+                jumps = if (agreed) jumps + 1 else 1
+                if (jumps >= config.jumpLooksToReset) {
+                    jumpCorners = null
                     jumps = 0
                     settling = false
                     // The darts are kept: they are stored at board positions, which a moved camera does not change.
@@ -330,6 +339,7 @@ class MlDartTracker(
                 } else previous
             } else {
                 jumps = 0
+                jumpCorners = null
                 settling = false
                 cal.indices.map {
                     Point(previous[it].x + (cal[it].x - previous[it].x) * config.smoothing, previous[it].y + (cal[it].y - previous[it].y) * config.smoothing)

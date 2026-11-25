@@ -379,6 +379,35 @@ class MlDartTrackerTest {
     }
 
     @Test
+    fun theMatMovingWhileTheDartsArePulledPassesTheTurnWithinAFewLooks() {
+        val hit = DartHit(5, Multiplier.SINGLE)
+        visible = listOf(pixelOf(hit))
+        repeat(3) { look() }
+        moveCamera(45.0, 30.0, emptyList())
+        // The hand that pulled the darts takes four looks to come and go.
+        var looksTaken = 0
+        var passed = false
+        for (step in 0 until 4) { looksTaken++; passed = passed || tracker.process(handAt(step)).any { it is TrackerEvent.DartsRemoved } }
+        while (!passed && looksTaken < 40) { looksTaken++; passed = look().any { it is TrackerEvent.DartsRemoved } }
+        assertTrue("took $looksTaken looks", passed && looksTaken <= 10)
+        assertEquals(0, tracker.darts)
+    }
+
+    @Test
+    fun aMoveIsOnlyAcceptedOnceTwoLooksAgreeOnTheNewPosition() {
+        val hit = DartHit(5, Multiplier.SINGLE)
+        visible = listOf(pixelOf(hit))
+        repeat(3) { look() }
+        // A hand over the corners: every look reads the board somewhere else, so the old position is kept.
+        for (i in 0 until 6) {
+            moveCamera(if (i % 2 == 0) 60.0 else -60.0, if (i % 3 == 0) 40.0 else -30.0 * i, listOf(hit))
+            val events = look()
+            assertTrue(events.isEmpty())
+        }
+        assertEquals(1, tracker.darts)
+    }
+
+    @Test
     fun aNewDartThatLandsRightAfterACameraKnockIsStillScored() {
         val old = DartHit(5, Multiplier.SINGLE)
         val fresh = DartHit(20, Multiplier.TRIPLE)
