@@ -52,14 +52,12 @@ class TrainingCollector(private val context: Context) {
         return folder().listFiles()?.size ?: 0
     }
 
-    fun full(): Boolean = count() >= LIMIT
-
     /**
      * Saves [frame] with its labels; [onSaved] gets the number of photos now stored (or -1 on failure).
-     * A [fix] is a dart the player corrected: the photo is kept even when the usual limit is reached, and what the player said is stored with it.
+     * A [fix] is a dart the player corrected: what the player said is stored with the photo.
      */
     fun save(frame: ColorFrame, corners: List<Point>, darts: List<Point>, note: String, fix: JSONObject? = null, onSaved: (Int) -> Unit) {
-        if (released || corners.size != 4 || (full() && (fix == null || count() >= LIMIT + FIX_RESERVE))) return
+        if (released || corners.size != 4) return
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date()) + if (fix != null) "-fix" else ""
         io.execute {
             val saved = runCatching {
@@ -128,9 +126,6 @@ class TrainingCollector(private val context: Context) {
 
     companion object {
         const val FOLDER = "OpenDarts/Training"
-        const val LIMIT = 700
-        /** Room kept above [LIMIT] for photos of darts the player corrected, the most useful ones to retrain on. */
-        const val FIX_RESERVE = 100
         private const val ENABLED = "enabled"
         private const val COUNT = "count"
 
