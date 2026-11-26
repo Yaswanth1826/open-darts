@@ -14,12 +14,12 @@ import com.opendarts.R
 
 /** The Open Darts palette: near-black surfaces with one lime accent. */
 object Pal {
-    val Bg = Color(0xFF090B0F)
-    val Surface = Color(0xFF12161C)
-    val Raised = Color(0xFF1B212A)
-    val Line = Color(0xFF2A323D)
+    val Bg = Color(0xFF161B23)
+    val Surface = Color(0xFF212833)
+    val Raised = Color(0xFF2D3644)
+    val Line = Color(0xFF414C5C)
     val Text = Color(0xFFF2F5F9)
-    val Muted = Color(0xFF8A96A6)
+    val Muted = Color(0xFFB4BFCE)
     val Lime = Color(0xFFC6F24E)
     val OnLime = Color(0xFF0C1400)
     val Violet = Color(0xFF8E7CFF)
