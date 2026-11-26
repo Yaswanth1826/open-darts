@@ -32,7 +32,25 @@ class TrainingCollector(private val context: Context) {
     @Volatile var enabled = isOn(context)
         set(value) { field = value; setOn(context, value) }
 
+    init {
+        // Photos deleted in the Gallery must free their place, or the counter stays "full" and nothing is saved again.
+        io.execute {
+            runCatching { actualCount() }.getOrNull()?.let { prefs.edit().putInt(COUNT, it).apply() }
+        }
+    }
+
     fun count(): Int = prefs.getInt(COUNT, 0)
+
+    private fun actualCount(): Int {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            context.contentResolver.query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, arrayOf(MediaStore.Images.Media._ID),
+                "${MediaStore.Images.Media.RELATIVE_PATH} LIKE ?", arrayOf("${Environment.DIRECTORY_PICTURES}/$FOLDER%"), null,
+            )?.use { return it.count }
+            error("no cursor")
+        }
+        return folder().listFiles()?.size ?: 0
+    }
 
     fun full(): Boolean = count() >= LIMIT
 
