@@ -46,6 +46,7 @@ $env:JAVA_HOME='C:\temp\jdk17\extract\jdk-17.0.14+7'; $env:Path="$env:JAVA_HOME\
 6. **WDF bull-off option:** winner chooses to throw first or second.
 7. **Not verified on a real phone:** the menu button over the live camera, sound volume and quality, the 36 dp bin target, the faster re-lock, the camera bull-off, the lighter theme.
 8. `plan.md` is stale (last refreshed 2026-11-22). It is not in the repo, only in the old session folder. Use this file instead.
+9. **Label review, then retrain (2026-11-28):** photos live in two git-ignored folders, `Screenshots\Training` (4395 photos, each with a `.labels.json`) and `Screenshots\Holdout` (382). Everything else (the old per-date folders, `my_photos*`, `my_holdout*`, the zips) was deleted; regenerate with `from_captures.py` and `pack_for_kaggle.py`. The owner is re-checking every label: `python label_photos.py ../Screenshots/Training --unreviewed` (a photo passed with SPACE is stamped `"reviewed": true`; `m` shows the model's cyan marks, `h` shows the key help). `audit_labels.py` (model vs label disagreements, writes `audit.json`) feeds `label_photos.py --queue audit.json`. After the review: rebuild the YOLO data from both folders, add close-pair copy-paste augmentation, retrain YOLOX-Tiny on Kaggle, and re-run the holdout evaluation.
 
 ## Release and Play
 - Upload keystore `C:\Users\YashwanthNimmala\open-darts-keys\upload.jks`, alias `upload`. GitHub secrets are set. The `release-bundle` workflow builds the signed `.aab`. CI is `.github/workflows/build-apk.yml` (Robolectric cache and pre-fetch).

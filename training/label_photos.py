@@ -13,7 +13,10 @@ the rings. Your work is saved next to each photo as <photo>.labels.json, so you 
     1 2 3 4       then click: move that corner. They sit where the outer edge of the double ring meets the wire between
                   1 = the 5 and the 20, 2 = the 17 and the 3, 3 = the 8 and the 11, 4 = the 13 and the 6
     SPACE / n     photo is right, next        b   previous photo        x   leave this photo out of training
-    u             undo the last added dart    q / Esc   save and quit
+    u             undo the last added dart    m   hide / show the network's own finds (cyan, with scores)    q / Esc   save and quit
+
+To re-check labels that were made before: python audit_labels.py <folders>, then python label_photos.py --queue audit.json
+goes through the photos where the network disagrees with the label, most suspicious first.
 """
 import argparse
 import json
@@ -30,6 +33,7 @@ GREEN = (118, 230, 0)
 RED = (40, 40, 255)
 YELLOW = (0, 220, 255)
 ORANGE = (0, 140, 255)
+CYAN = (255, 255, 0)
 BLUE = (255, 160, 0)
 
 
@@ -43,11 +47,15 @@ def ring_points(corners, radius_mm, steps=90):
 
 
 class Photo:
-    def __init__(self, path):
+    def __init__(self, path, entry=None):
         self.path = path
         self.image = cv2.imread(path)
         saved = json.load(open(labels_path(path))) if os.path.exists(labels_path(path)) else None
         meta = saved or load_meta(path) or {}
+        self.extra = {k: v for k, v in (saved or {}).items() if k not in ("corners", "darts", "skip")}
+        self.entry = entry
+        self.model = (entry or {}).get("model_darts", [])
+        self.reasons = (entry or {}).get("reasons", [])
         self.corners = [list(map(float, c)) for c in meta.get("corners", [])]
         self.darts = [list(map(float, d)) for d in meta.get("darts", [])]
         meta_note = load_meta(path) or {}
@@ -68,8 +76,10 @@ class Photo:
             self.darts.append([float(now[0]), float(now[1])])
 
     def save(self, skip=False):
+        extra = dict(self.extra)
+        extra["reviewed"] = True
         with open(labels_path(self.path), "w") as f:
-            json.dump({"corners": self.corners, "darts": self.darts, "skip": skip}, f)
+            json.dump({"corners": self.corners, "darts": self.darts, "skip": skip, **extra}, f)
         self.checked = True
 
 
@@ -80,6 +90,8 @@ class View:
         h, w = photo.image.shape[:2]
         self.fit = min(self.w / w, self.h / h)
         self.zoom = 1.0
+        self.show_model = False
+        self.show_help = False
         self.centre = (w / 2, h / 2)
 
     @property
@@ -118,6 +130,11 @@ class View:
             cv2.circle(canvas, (x, y), 9, RED, 2, cv2.LINE_AA)
             cv2.drawMarker(canvas, (x, y), RED, cv2.MARKER_CROSS, 7, 1, cv2.LINE_AA)
         fix = p.fix
+        if self.show_model:
+            for mx, my, score in p.model:
+                x, y = map(int, self.to_canvas(mx, my))
+                cv2.drawMarker(canvas, (x, y), CYAN, cv2.MARKER_DIAMOND, 16, 2, cv2.LINE_AA)
+                cv2.putText(canvas, "%.2f" % score, (x + 10, y + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.45, CYAN, 1, cv2.LINE_AA)
         if fix:
             if fix.get("wasPixel"):
                 x, y = map(int, self.to_canvas(*fix["wasPixel"]))
@@ -125,10 +142,14 @@ class View:
             if fix.get("nowPixel"):
                 x, y = map(int, self.to_canvas(*fix["nowPixel"]))
                 cv2.drawMarker(canvas, (x, y), BLUE, cv2.MARKER_DIAMOND, 22, 2, cv2.LINE_AA)
-        status = "set corner %d: click it" % pending_corner if pending_corner else \
-            "%d darts   LMB add tip   RMB remove   z zoom   1-4 corner   SPACE next   b back   x skip   u undo   q quit" % len(p.darts)
-        title = "%d/%d this session (%d already saved earlier)  %s  [%s]%s" % (index + 1, total, done_before, os.path.basename(p.path), p.note, "  checked" if p.checked else "")
-        lines = [title, status]
+        title = "%d/%d this session (%d already saved earlier)  %s  [%s]%s   %d darts" % (index + 1, total, done_before, os.path.basename(p.path), p.note, "  checked" if p.checked else "", len(p.darts))
+        lines = [title]
+        if pending_corner:
+            lines.append("set corner %d: click it" % pending_corner)
+        elif self.show_help:
+            lines.append("LMB add tip   RMB remove   z zoom   1-4 corner   SPACE next   b back   x skip   u undo   m model marks   h hide this help   q quit")
+        if p.reasons:
+            lines.append("AUDIT: " + ", ".join(p.reasons))
         if fix:
             lines.append("PLAYER FIX: camera said '%s', the player says '%s'. Orange ring = where the camera saw it, blue diamond = middle of the area the player named. The red circle starts at that diamond: right-click it and click the real tip instead." % (fix.get("was") or "nothing", fix.get("now") or "no dart"))
         for k, line in enumerate(lines):
@@ -148,24 +169,45 @@ def nearest(points, x, y, within):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("folder", help="the folder with the photos copied from the phone")
+    parser.add_argument("folder", nargs="?", help="the folder with the photos copied from the phone (not needed with --queue)")
     parser.add_argument("--all", action="store_true", help="also show the photos that were already checked")
+    parser.add_argument("--unreviewed", action="store_true", help="the labelled photos you have not looked at yet (every photo you pass with SPACE is marked as reviewed)")
+    parser.add_argument("--queue", help="audit.json from audit_labels.py: review the labelled photos it flagged, most suspicious first (photos you already reviewed are skipped)")
+    parser.add_argument("--again", action="store_true", help="with --queue: also the photos reviewed before")
+    parser.add_argument("--min-score", type=float, default=0.01, help="with --queue: only photos with at least this suspicion score (default: every flagged photo)")
     parser.add_argument("--darts-over", type=int, default=None, help="only the checked photos with more than this many dart marks (3 is a good check: at most three darts are on the board, plus any stuck outside the doubles)")
     args = parser.parse_args()
-    paths = [p for p in photos_in(args.folder) if args.all or not os.path.exists(labels_path(p))]
-    done_before = sum(os.path.exists(labels_path(p)) for p in photos_in(args.folder))
-    if done_before and not args.all and args.darts_over is None:
-        print("%d photos are already labelled and saved; continuing with the %d that are left." % (done_before, len(paths)))
-    if args.darts_over is not None:
-        paths = [p for p in photos_in(args.folder) if os.path.exists(labels_path(p)) and len(json.load(open(labels_path(p))).get("darts", [])) > args.darts_over]
-    paths.sort(key=lambda p: "-fix" not in os.path.basename(p))
+    entries = {}
+    if args.queue:
+        queue = [e for e in json.load(open(args.queue)) if e["score"] >= args.min_score]
+        if not args.again:
+            queue = [e for e in queue if not json.load(open(labels_path(e["path"]))).get("reviewed")]
+        entries = {e["path"]: e for e in queue}
+        paths = [e["path"] for e in queue]
+        done_before = 0
+    else:
+        if not args.folder:
+            parser.error("give a folder, or --queue")
+        def reviewed(p):
+            return os.path.exists(labels_path(p)) and bool(json.load(open(labels_path(p))).get("reviewed"))
+        if args.unreviewed:
+            paths = [p for p in photos_in(args.folder) if not reviewed(p)]
+            done_before = sum(reviewed(p) for p in photos_in(args.folder))
+        else:
+            paths = [p for p in photos_in(args.folder) if args.all or not os.path.exists(labels_path(p))]
+            done_before = sum(os.path.exists(labels_path(p)) for p in photos_in(args.folder))
+        if done_before and not args.all and not args.unreviewed and args.darts_over is None:
+            print("%d photos are already labelled and saved; continuing with the %d that are left." % (done_before, len(paths)))
+        if args.darts_over is not None:
+            paths = [p for p in photos_in(args.folder) if os.path.exists(labels_path(p)) and len(json.load(open(labels_path(p))).get("darts", [])) > args.darts_over]
+        paths.sort(key=lambda p: "-fix" not in os.path.basename(p))
     if not paths:
-        print("Nothing to check (use --all to go through the checked ones again).")
+        print("Nothing to check (use --all, or --again with --queue, to go through the checked ones again).")
         return
     state = {"i": 0, "view": None, "pending": None, "mouse": (0, 0)}
 
     def open_photo(i):
-        photo = Photo(paths[i])
+        photo = Photo(paths[i], entries.get(paths[i]))
         state["i"], state["view"], state["pending"] = i, View(photo), None
 
     def on_mouse(event, x, y, flags, _):
@@ -199,6 +241,10 @@ def main():
             break
         elif key == ord("z"):
             view.toggle_zoom(*state["mouse"])
+        elif key == ord("m"):
+            view.show_model = not view.show_model
+        elif key == ord("h"):
+            view.show_help = not view.show_help
         elif key == ord("u") and photo.darts:
             photo.darts.pop()
         elif key in (ord("1"), ord("2"), ord("3"), ord("4")):
@@ -214,7 +260,7 @@ def main():
         elif key == ord("b") and state["i"] > 0:
             open_photo(state["i"] - 1)
     cv2.destroyAllWindows()
-    print("Now run: python from_captures.py %s --out my_photos" % args.folder)
+    print("Now run: python from_captures.py %s --out my_photos" % (args.folder or "<each photo folder>"))
 
 
 if __name__ == "__main__":
