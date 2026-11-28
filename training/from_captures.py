@@ -102,6 +102,16 @@ def flattened(img, corners, darts, rng, jitter):
     return flat, label_lines(target.tolist(), pts(darts))
 
 
+def closest_pair_mm(corners, darts):
+    """Smallest distance between two labelled darts, in millimetres on the flattened board (None with fewer than two)."""
+    if len(darts) < 2:
+        return None
+    h = cv2.getPerspectiveTransform(np.array(corners, np.float32), flat_corners())
+    p = cv2.perspectiveTransform(np.array(darts, np.float32)[None], h)[0]
+    mm = SIZE * FLAT_SCALE / 170.0
+    return min(math.hypot(*(p[i] - p[j])) for i in range(len(p)) for j in range(i)) / mm
+
+
 def photos_in(folder):
     for root, _, names in os.walk(folder):
         for name in sorted(names):
@@ -114,6 +124,8 @@ def main():
     parser.add_argument("source", help="folder with the photos from the phone (and their .labels.json files)")
     parser.add_argument("--out", default="my_photos", help="YOLO folder to create (images/ and labels/)")
     parser.add_argument("--flat", type=int, default=3, help="flattened copies per photo, each with slightly different corners")
+    parser.add_argument("--close-repeat", type=int, default=0, help="extra flattened copies (each with its own corner jitter) of every photo whose two closest darts are under --close-mm apart; the network rarely sees such pairs and gives the second tip a weak score (use for training, not for the holdout)")
+    parser.add_argument("--close-mm", type=float, default=10.0)
     parser.add_argument("--trust-model", action="store_true", help="also use photos that were not checked with label_photos.py")
     args = parser.parse_args()
     rng = np.random.RandomState(0)
@@ -121,7 +133,7 @@ def main():
     os.makedirs(os.path.join(args.out, "images"), exist_ok=True)
     os.makedirs(os.path.join(args.out, "labels"), exist_ok=True)
 
-    used = unchecked = excluded = skipped = 0
+    used = unchecked = excluded = skipped = close_photos = 0
     for photo in photos_in(args.source):
         stem = os.path.splitext(os.path.basename(photo))[0]
         meta = None
@@ -142,6 +154,10 @@ def main():
         corners, darts = meta["corners"], meta["darts"]
         samples = [(f"{stem}_whole", whole_frame(img, corners, darts))]
         samples += [(f"{stem}_flat{k}", flattened(img, corners, darts, rng, 0.0 if k == 0 else 0.012)) for k in range(args.flat)]
+        gap = closest_pair_mm(corners, darts)
+        if args.close_repeat and gap is not None and gap < args.close_mm:
+            samples += [(f"{stem}_close{k}", flattened(img, corners, darts, rng, 0.012)) for k in range(args.close_repeat)]
+            close_photos += 1
         for sample_name, (image, lines) in samples:
             if lines is None or sum(1 for l in lines if not l.startswith("0 ")) < 4:
                 skipped += 1
@@ -151,7 +167,7 @@ def main():
                 f.write("\n".join(lines) + "\n")
             used += 1
     print(f"{used} training pictures written to {args.out}; {unchecked} photos not checked yet (run label_photos.py), "
-          f"{excluded} left out on purpose, {skipped} unusable (a corner cut off)")
+          f"{excluded} left out on purpose, {skipped} unusable (a corner cut off), {close_photos} close-pair photos repeated")
 
 
 if __name__ == "__main__":
