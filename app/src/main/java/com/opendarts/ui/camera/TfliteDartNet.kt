@@ -46,7 +46,7 @@ class TfliteDartNet private constructor(private val interpreter: Interpreter) : 
         val result = FloatArray(output.capacity() / 4)
         output.asFloatBuffer().get(result)
         val dims = outputShape.filter { it > 1 }
-        return YoloDecoder.decode(result, dims[0], dims[1], inputSize)
+        return YoloDecoder.decode(result, dims[0], dims[1], inputSize, scoreThreshold = YoloDecoder.WEAK_SCORE, suppressDistance = YoloDecoder.TIP_SEPARATION)
     }
 
     /** Waits for a running look to finish, so the interpreter is never freed while it is in use. */

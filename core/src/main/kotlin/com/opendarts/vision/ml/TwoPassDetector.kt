@@ -3,6 +3,7 @@ package com.opendarts.vision.ml
 import com.opendarts.geometry.BoardGeometry
 import com.opendarts.geometry.Homography
 import com.opendarts.geometry.Point
+import kotlin.math.hypot
 
 /**
  * Where the network found the four calibration points (in frame pixels; null where one is missing) and the darts.
@@ -33,6 +34,9 @@ class TwoPassDetector(
     private val dartScore: Float = 0.35f,
     private val calibrationScore: Float = 0.3f,
     private val tips: TipRefiner? = null,
+    /** Two tips only a few millimetres apart read as one dart: the second one only gets a weak score. Such a mark counts when a sure dart is this close (mm) to it. */
+    private val weakDartScore: Float = YoloDecoder.WEAK_SCORE,
+    private val weakReachMm: Double = 16.0,
 ) {
     /** Corner positions (share of the image) of the flattened board, the layout the network was trained on. */
     private val flatCorners: List<Point> = BoardGeometry.MODEL_CALIBRATION_POINTS.map {
@@ -70,23 +74,41 @@ class TwoPassDetector(
         val size = net.inputSize
         val flat = frame.warp(flatToFrame, size)
         val found = net.run(flat)
-        return read(found, { flatToFrame.apply(it.x * size, it.y * size) }) { darts ->
+        return read(found, { flatToFrame.apply(it.x * size, it.y * size) }, withWeak = true) { darts ->
             val marks = darts.sortedByDescending { it.score }.map { Point(it.x * size, it.y * size) }
             (tips?.refine(flat, marks) ?: marks).map { flatToFrame.apply(it.x, it.y) }
         }
     }
 
-    private fun read(found: List<Detection>, toFrame: (Detection) -> Point, dartMarks: (List<Detection>) -> List<Point> = { it.map(toFrame) }): FrameDetections {
+    private fun read(found: List<Detection>, toFrame: (Detection) -> Point, withWeak: Boolean = false, dartMarks: (List<Detection>) -> List<Point> = { it.map(toFrame) }): FrameDetections {
         val corners = (DartClass.CAL_FIRST..DartClass.CAL_LAST).map { cls ->
             found.filter { it.cls == cls && it.score >= calibrationScore }.maxByOrNull { it.score }?.let(toFrame)
         }
-        val darts = dartMarks(found.filter { it.cls == DartClass.DART && it.score >= dartScore })
+        val sure = found.filter { it.cls == DartClass.DART && it.score >= dartScore }
+        val darts = dartMarks(if (withWeak) sure + closeToSure(found, sure) else sure)
         return FrameDetections(corners, darts)
+    }
+
+    /**
+     * Weak dart marks right next to a sure dart: the second dart of a pair whose tips nearly touch. The weak mark often sits on the barrel
+     * a little behind that tip, so it is pulled to at most [CLOSE_PAIR_MM] from the sure dart (flat-board shares of the image).
+     */
+    private fun closeToSure(found: List<Detection>, sure: List<Detection>): List<Detection> {
+        val reach = weakReachMm * FLAT_SCALE
+        val pull = CLOSE_PAIR_MM * FLAT_SCALE
+        return found.filter { it.cls == DartClass.DART && it.score >= weakDartScore && it.score < dartScore }.mapNotNull { weak ->
+            val next = sure.minByOrNull { hypot(it.x - weak.x, it.y - weak.y) } ?: return@mapNotNull null
+            val gap = hypot(next.x - weak.x, next.y - weak.y)
+            if (gap > reach) return@mapNotNull null
+            val k = if (gap > pull) pull / gap else 1.0
+            Detection(weak.cls, weak.score, next.x + (weak.x - next.x) * k, next.y + (weak.y - next.y) * k)
+        }
     }
 
     companion object {
         /** The flattened training images show the 170 mm outer edge of the board at 0.37628 of their size. */
         const val HINT_MISSES_BEFORE_SEARCH = 2
+        const val CLOSE_PAIR_MM = 6.0
         const val FLAT_SCALE = 0.37628 / BoardGeometry.DOUBLE_OUTER_RADIUS
     }
 }

@@ -165,6 +165,44 @@ class TwoPassDetectorTest {
         val frame = frameWithDots(640, 480, listOf(1 to Point(100.0, 100.0), 2 to Point(200.0, 200.0), DartClass.DART to Point(150.0, 150.0)))
         assertNull(TwoPassDetector(net).detect(frame).calibration)
     }
+
+    /** A network that always answers with the same detections, in shares of the (flattened) image. */
+    private class Scripted(override val inputSize: Int, private val answer: List<Detection>) : DartNet {
+        override fun run(image: ColorFrame) = answer
+    }
+
+    private val flatFrame = ColorFrame(640, 640, ByteArray(640 * 640 * 3))
+    private val flatHint = BoardGeometry.MODEL_CALIBRATION_POINTS.map {
+        Point(640 * (0.5 + TwoPassDetector.FLAT_SCALE * it.x), 640 * (0.5 - TwoPassDetector.FLAT_SCALE * it.y))
+    }
+    private val flatCorners = flatHint.mapIndexed { i, p -> Detection(i + 1, 0.9f, p.x / 640, p.y / 640) }
+    private fun mmShare(mm: Double) = mm * TwoPassDetector.FLAT_SCALE
+
+    @Test
+    fun aWeakMarkNextToASureDartIsTheSecondDartOfAClosePairAndIsPulledOntoIt() {
+        val sure = Detection(DartClass.DART, 0.9f, 0.7, 0.7)
+        val weak = Detection(DartClass.DART, 0.12f, 0.7 - mmShare(10.0), 0.7)
+        val darts = TwoPassDetector(Scripted(640, flatCorners + sure + weak)).detect(flatFrame, flatHint).darts
+        assertEquals(2, darts.size)
+        assertTrue(near(darts[0], Point(0.7 * 640, 0.7 * 640), 0.5))
+        val gapMm = Math.hypot(darts[1].x - darts[0].x, darts[1].y - darts[0].y) / (640 * TwoPassDetector.FLAT_SCALE)
+        assertEquals(TwoPassDetector.CLOSE_PAIR_MM, gapMm, 0.1)
+    }
+
+    @Test
+    fun aWeakMarkFarFromAnySureDartIsIgnored() {
+        val sure = Detection(DartClass.DART, 0.9f, 0.7, 0.7)
+        val weak = Detection(DartClass.DART, 0.2f, 0.3, 0.4)
+        assertEquals(1, TwoPassDetector(Scripted(640, flatCorners + sure + weak)).detect(flatFrame, flatHint).darts.size)
+        assertTrue(TwoPassDetector(Scripted(640, flatCorners + weak)).detect(flatFrame, flatHint).darts.isEmpty())
+    }
+
+    @Test
+    fun aVeryWeakMarkNextToASureDartIsIgnored() {
+        val sure = Detection(DartClass.DART, 0.9f, 0.7, 0.7)
+        val noise = Detection(DartClass.DART, 0.04f, 0.7 - mmShare(8.0), 0.7)
+        assertEquals(1, TwoPassDetector(Scripted(640, flatCorners + sure + noise)).detect(flatFrame, flatHint).darts.size)
+    }
 }
 
 /** Fake tip network: the tip is the centre of the white blob in the patch; no blob means no tip. */
@@ -488,6 +526,24 @@ class MlDartTrackerTest {
             rgb[i] = -1; rgb[i + 1] = -1; rgb[i + 2] = -1
         }
         return ColorFrame(640, 480, rgb)
+    }
+
+    @Test
+    fun twoDartsThreeAndAHalfMillimetresApartAreBothScoredAndTheOtherStaysWhenOneIsPulled() {
+        val a = DartHit(15, Multiplier.DOUBLE)
+        val aPixel = pixelOf(a)
+        val bPixel = boardToPixel.apply(besideInMm(a, 3.5))
+        visible = listOf(aPixel)
+        repeat(3) { look() }
+        visible = listOf(aPixel, bPixel)
+        val events = (0 until 3).flatMap { look() }
+        assertEquals(1, landed(events).size)
+        assertEquals(2, tracker.darts)
+        visible = listOf(bPixel)
+        handPass()
+        val removed = (0 until 6).flatMap { look() }.filterIsInstance<TrackerEvent.DartsRemoved>()
+        assertEquals(listOf(TrackerEvent.DartsRemoved(1)), removed)
+        assertEquals(1, tracker.darts)
     }
 
     @Test

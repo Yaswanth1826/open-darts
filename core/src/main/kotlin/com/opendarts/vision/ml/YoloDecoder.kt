@@ -26,6 +26,12 @@ interface DartNet {
  * and with boxes given as shares of the image or in input pixels.
  */
 object YoloDecoder {
+    /** Lowest dart score worth keeping: the second tip of two darts that nearly touch only gets a weak score (see [TwoPassDetector]). */
+    const val WEAK_SCORE = 0.08f
+
+    /** Two real tips can be 4 mm apart (0.0022 of the flattened image per mm), so only marks closer than about 3 mm are one tip. */
+    const val TIP_SEPARATION = 0.007
+
     fun decode(
         output: FloatArray,
         firstDim: Int,
